@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shear Access Control System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #ddd;
+        }
+        .status-card.connected {
+            border-left-color: #28a745;
+        }
+        .status-card.disconnected {
+            border-left-color: #dc3545;
+        }
+        .status-card.warning {
+            border-left-color: #ffc107;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-indicator.green {
+            background-color: #28a745;
+        }
+        .status-indicator.red {
+            background-color: #dc3545;
+        }
+        .status-indicator.yellow {
+            background-color: #ffc107;
+        }
+        .io-status {
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: white;
+        }
+        .io-status.on {
+            background-color: #28a745; /* Green for ON */
+        }
+        .io-status.off {
+            background-color: #dc3545; /* Red for OFF */
+        }
+        .io-status.checking {
+            background-color: #6c757d; /* Gray for checking */
+            color: white;
+        }
+        .output-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+            padding: 5px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .output-control span:first-child {
+            min-width: 80px;
+            font-weight: bold;
+        }
+        .mode-selector {
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .toggle-btn {
+            padding: 4px 12px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .toggle-btn:enabled {
+            background: #007bff;
+            color: white;
+        }
+        .toggle-btn:disabled {
+            background: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+        .controls {
+            padding: 20px;
+            border-top: 1px solid #eee;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn.danger {
+            background: #dc3545;
+        }
+        .btn.danger:hover {
+            background: #c82333;
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.success:hover {
+            background: #1e7e34;
+        }
+        .logs {
+            padding: 20px;
+            border-top: 1px solid #eee;
+        }
+        .log-container {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        .log-timestamp {
+            color: #666;
+        }
+        .update-time {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✂️ Shear Access Control System</h1>
+            <p>USB HID Card Reader with PowerApp Dataverse Integration</p>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card {{ 'connected' if reader_status else 'disconnected' }}">
+                <h3>
+                    <span class="status-indicator {{ 'green' if reader_status else 'red' }}"></span>
+                    Card Reader Status
+                </h3>
+                <p><strong>Status:</strong> {{ 'Connected' if reader_status else 'Disconnected' }}</p>
+                <p><strong>Device:</strong> <span id="reader-device">Checking...</span></p>
+                <p><strong>Last Read:</strong> <span id="last-read">Never</span></p>
+            </div>
+            
+            <div class="status-card {{ 'connected' if labjack_status else 'disconnected' }}">
+                <h3>
+                    <span class="status-indicator {{ 'green' if labjack_status else 'red' }}"></span>
+                    LabJack U3 Status
+                </h3>
+                <p><strong>Status:</strong> {{ 'Connected' if labjack_status else 'Disconnected' }}</p>
+                <p><strong>Device:</strong> <span id="labjack-device">Checking...</span></p>
+                <p><strong>Temperature:</strong> <span id="temperature">--°C</span></p>
+                <p><strong>Shear:</strong> <span id="shear-status">Unknown</span></p>
+            </div>
+            
+            <div class="status-card">
+                <h3>
+                    <span class="status-indicator green"></span>
+                    I/O Status
+                </h3>
+                <div>
+                    <p><strong>Digital Inputs:</strong></p>
+                    <p>FIO4 (Input 4): <span id="input-4" class="io-status">Checking...</span></p>
+                    <p>FIO5 (Input 5): <span id="input-5" class="io-status">Checking...</span></p>
+                </div>
+                <div>
+                    <p><strong>Digital Outputs:</strong></p>
+                    <div class="output-control">
+                        <span>FIO6 (Output 6):</span>
+                        <span id="output-6" class="io-status">Checking...</span>
+                        <select id="mode-6" class="mode-selector" onchange="toggleMode(6)">
+                            <option value="auto">Auto</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                        <button id="toggle-6" class="toggle-btn" disabled onclick="toggleOutput(6)">ON/OFF</button>
+                    </div>
+                    <div class="output-control">
+                        <span>FIO7 (Output 7):</span>
+                        <span id="output-7" class="io-status">Checking...</span>
+                        <select id="mode-7" class="mode-selector" onchange="toggleMode(7)">
+                            <option value="auto">Auto</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                        <button id="toggle-7" class="toggle-btn" disabled onclick="toggleOutput(7)">ON/OFF</button>
+                    </div>
+                </div>
+                <div>
+                    <p><strong>Analog Inputs:</strong></p>
+                    <p>FIO0 (AIN0): <span id="analog-0">Checking...</span> V</p>
+                    <p>FIO1 (AIN1): <span id="analog-1">Checking...</span> V</p>
+                    <p>FIO2 (AIN2): <span id="analog-2">Checking...</span> V</p>
+                    <p>FIO3 (AIN3): <span id="analog-3">Checking...</span> V</p>
+                </div>
+            </div>
+            
+            <div class="status-card">
+                <h3>
+                    <span class="status-indicator green"></span>
+                    Server Status
+                </h3>
+                <p><strong>Status:</strong> Running</p>
+                <p><strong>Local URL:</strong> http://localhost:5000</p>
+                <p><strong>Port:</strong> 5000</p>
+                <p><strong>Uptime:</strong> <span id="uptime">Calculating...</span></p>
+            </div>
+            
+            <div class="status-card">
+                <h3>
+                    <span class="status-indicator green"></span>
+                    Statistics
+                </h3>
+                <p><strong>Cards Read Today:</strong> <span id="cards-today">0</span></p>
+                <p><strong>Access Attempts:</strong> <span id="access-attempts">0</span></p>
+                <p><strong>Success Rate:</strong> <span id="success-rate">100%</span></p>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <h3>Controls</h3>
+            <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+            <button class="btn" onclick="viewLogs()">View Logs</button>
+            <button class="btn danger" onclick="clearLogs()">Clear Logs</button>
+            
+            <h4>LabJack U3 Controls</h4>
+            <button class="btn success" onclick="unlockShear()">🔓 Unlock Shear</button>
+            <button class="btn danger" onclick="lockShear()">🔒 Force Lock Shear</button>
+            <button class="btn" onclick="toggleLED('green')">💚 Green LED</button>
+            <button class="btn" onclick="toggleLED('red')">❤️ Red LED</button>
+            <button class="btn" onclick="toggleLED('blue')">💙 Blue LED</button>
+            <button class="btn" onclick="readSensors()">📊 Read Sensors</button>
+        </div>
+        
+        <div class="logs">
+            <h3>Recent Events</h3>
+            <div class="log-container" id="log-container">
+                <div class="log-entry">
+                    <span class="log-timestamp">[{{ "now"|datetime }}]</span>
+                    Server started successfully
+                </div>
+            </div>
+        </div>
+        
+        <div class="update-time">
+            Last updated: <span id="last-updated">{{ "now"|datetime }}</span>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh functionality
+        let refreshInterval;
+        
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update reader status
+                    const readerDevice = data.card_reader.device_info ? 
+                        data.card_reader.device_info.product : 'Not detected';
+                    document.getElementById('reader-device').textContent = readerDevice;
+                    
+                    // Update LabJack status
+                    if (data.labjack_u3.connected && data.labjack_u3.device_info) {
+                        const ljDevice = `U3 (SN: ${data.labjack_u3.device_info.serial_number})`;
+                        document.getElementById('labjack-device').textContent = ljDevice;
+                        
+                        // Update I/O status if available
+                        if (data.labjack_u3.all_states) {
+                            const states = data.labjack_u3.all_states;
+                            
+                            // Update digital inputs with color coding
+                            if (states.digital_inputs) {
+                                // Input 4 (FIO4) - Shear sensor
+                                const input4 = states.digital_inputs['FIO4'];
+                                const input4Element = document.getElementById('input-4');
+                                if (input4Element) {
+                                    input4Element.textContent = input4 ? 'ON' : 'OFF';
+                                    input4Element.className = `io-status ${input4 ? 'on' : 'off'}`;
+                                }
+                                
+                                // Input 5 (FIO5) - Motion sensor
+                                const input5 = states.digital_inputs['FIO5'];
+                                const input5Element = document.getElementById('input-5');
+                                if (input5Element) {
+                                    input5Element.textContent = input5 ? 'ON' : 'OFF';
+                                    input5Element.className = `io-status ${input5 ? 'on' : 'off'}`;
+                                }
+                            }
+                            
+                            // Update digital outputs with color coding
+                            if (states.digital_outputs) {
+                                // Output 6 (FIO6) - Unlock relay
+                                const output6 = states.digital_outputs['FIO6'];
+                                const output6Element = document.getElementById('output-6');
+                                if (output6Element) {
+                                    output6Element.textContent = output6 ? 'ON' : 'OFF';
+                                    output6Element.className = `io-status ${output6 ? 'on' : 'off'}`;
+                                }
+                                
+                                // Output 7 (FIO7) - Status LED
+                                const output7 = states.digital_outputs['FIO7'];
+                                const output7Element = document.getElementById('output-7');
+                                if (output7Element) {
+                                    output7Element.textContent = output7 ? 'ON' : 'OFF';
+                                    output7Element.className = `io-status ${output7 ? 'on' : 'off'}`;
+                                }
+                            }
+                            
+                            // Update analog inputs (keep existing format)
+                            // Update analog inputs
+                            if (states.analog_inputs) {
+                                // Update individual analog input displays
+                                for (let i = 0; i < 4; i++) {
+                                    const channel = `AIN${i}`;
+                                    const value = states.analog_inputs[channel];
+                                    const element = document.getElementById(`analog-${i}`);
+                                    if (element && value !== undefined) {
+                                        element.textContent = value.toFixed(3);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Enable mode selectors when LabJack is connected
+                        for (let i = 6; i <= 7; i++) {
+                            const modeSelector = document.getElementById(`mode-${i}`);
+                            if (modeSelector) {
+                                modeSelector.disabled = false;
+                                toggleMode(i); // Apply current mode setting
+                            }
+                        }
+                    } else {
+                        document.getElementById('labjack-device').textContent = 'Not detected';
+                        
+                        // Set all I/O status to N/A with checking style
+                        ['input-4', 'input-5', 'output-6', 'output-7'].forEach(id => {
+                            const element = document.getElementById(id);
+                            if (element) {
+                                element.textContent = 'N/A';
+                                element.className = 'io-status checking';
+                            }
+                        });
+                        
+                        // Disable all toggle buttons when LabJack not connected
+                        for (let i = 0; i < 4; i++) {
+                            const toggleBtn = document.getElementById(`toggle-${i}`);
+                            const modeSelector = document.getElementById(`mode-${i}`);
+                            if (toggleBtn) {
+                                toggleBtn.disabled = true;
+                                toggleBtn.style.background = '#e9ecef';
+                                toggleBtn.style.color = '#6c757d';
+                            }
+                            if (modeSelector) {
+                                modeSelector.disabled = true;
+                            }
+                        }
+                        
+                        document.getElementById('analog-inputs').textContent = 'N/A';
+                    }
+                    
+                    // Update timestamp
+                    document.getElementById('last-updated').textContent = new Date().toLocaleString();
+                })
+                .catch(error => {
+                    console.error('Error updating status:', error);
+                    addLogEntry('Error updating status: ' + error.message);
+                });
+        }
+        
+        function refreshStatus() {
+            updateStatus();
+            addLogEntry('Status refreshed');
+        }
+        
+        function viewLogs() {
+            // In a real implementation, this might open a modal or navigate to a logs page
+            addLogEntry('Viewing full logs...');
+        }
+        
+        function clearLogs() {
+            document.getElementById('log-container').innerHTML = '';
+            addLogEntry('Logs cleared');
+        }
+        
+        // LabJack T7 control functions
+        function unlockShear() {
+            addLogEntry('Triggering shear unlock...');
+            
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'unlock_shear',
+                    duration: 3.0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry('🔓 Shear unlocked for 3 seconds');
+                } else {
+                    addLogEntry('❌ Failed to unlock shear: ' + data.message);
+                }
+            })
+            .catch(error => {
+                addLogEntry('❌ Shear unlock error: ' + error.message);
+            });
+        }
+        
+        function lockShear() {
+            addLogEntry('Force locking shear...');
+            
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'lock_shear'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry('🔒 Shear force locked');
+                } else {
+                    addLogEntry('❌ Failed to lock shear: ' + data.message);
+                }
+            })
+            .catch(error => {
+                addLogEntry('❌ Shear lock error: ' + error.message);
+            });
+        }
+        
+        function toggleLED(color) {
+            addLogEntry(`Toggling ${color} LED...`);
+            
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    action: 'set_led',
+                    color: color,
+                    state: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`✅ ${color} LED activated`);
+                    // Turn off LED after 2 seconds
+                    setTimeout(() => {
+                        fetch('/api/labjack/control', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                action: 'set_led',
+                                color: color,
+                                state: false
+                            })
+                        });
+                    }, 2000);
+                } else {
+                    addLogEntry('❌ Failed to control LED: ' + data.message);
+                }
+            })
+            .catch(error => {
+                addLogEntry('❌ LED control error: ' + error.message);
+            });
+        }
+        
+        function readSensors() {
+            addLogEntry('Reading LabJack sensors...');
+            
+            fetch('/api/labjack/sensors')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const sensors = data.sensors;
+
+                        // Log the raw sensors object for debugging
+                        console.log('Raw sensors data:', sensors);
+
+                        addLogEntry(`📊 Shear: ${sensors.shear_locked ? 'Locked' : 'Unlocked'}`);
+                        addLogEntry(`📊 Motion: ${sensors.motion_detected ? 'Detected' : 'None'}`);
+                        if (sensors.temperature !== null) {
+                            addLogEntry(`📊 Temperature: ${sensors.temperature}°C`);
+                            document.getElementById('temperature').textContent = sensors.temperature + '°C';
+                        }
+                        
+                        // Display all digital inputs
+                        if (sensors.digital_inputs) {
+                            Object.entries(sensors.digital_inputs).forEach(([channel, value]) => {
+                                addLogEntry(`📊 Digital ${channel}: ${value ? 'HIGH' : 'LOW'}`);
+                            });
+                        }
+                        
+                        // Display all analog inputs
+                        if (sensors.analog_inputs) {
+                            Object.entries(sensors.analog_inputs).forEach(([channel, value]) => {
+                                addLogEntry(`📊 Analog ${channel}: ${value.toFixed(3)}V`);
+                            });
+                        }
+                        
+                        document.getElementById('shear-status').textContent = sensors.shear_locked ? 'Locked' : 'Unlocked';
+                    } else {
+                        addLogEntry('❌ Failed to read sensors: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    addLogEntry('❌ Sensor read error: ' + error.message);
+                });
+        }
+        
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('log-container');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only last 50 entries
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+        
+        // Start auto-refresh
+        function startAutoRefresh() {
+            updateStatus(); // Initial update
+            refreshInterval = setInterval(updateStatus, 5000); // Update every 5 seconds
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+        
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            startAutoRefresh();
+            addLogEntry('Dashboard loaded');
+        });
+        
+        // Stop refresh when page is hidden
+        // Auto/Manual mode and output control functions
+        function toggleMode(outputNum) {
+            const modeSelector = document.getElementById(`mode-${outputNum}`);
+            const toggleBtn = document.getElementById(`toggle-${outputNum}`);
+            
+            if (modeSelector.value === 'manual') {
+                toggleBtn.disabled = false;
+                toggleBtn.style.background = '#007bff';
+                toggleBtn.style.color = 'white';
+            } else {
+                toggleBtn.disabled = true;
+                toggleBtn.style.background = '#e9ecef';
+                toggleBtn.style.color = '#6c757d';
+            }
+        }
+        
+        function toggleOutput(outputNum) {
+            const outputElement = document.getElementById(`output-${outputNum}`);
+            const currentState = outputElement.textContent === 'ON';
+            const newState = !currentState;
+            
+            // Map output numbers to LabJack channels
+            const channelMap = {
+                6: 'FIO6',
+                7: 'FIO7'
+            };
+            
+            // Send control command to server
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'set_digital_output',
+                    channel: channelMap[outputNum],
+                    state: newState
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`✅ Output ${outputNum} set to ${newState ? 'ON' : 'OFF'}`);
+                    // Update will happen automatically via status refresh
+                } else {
+                    addLogEntry(`❌ Failed to control Output ${outputNum}: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                addLogEntry(`❌ Error controlling Output ${outputNum}: ${error.message}`);
+            });
+        }
+        
+        // Initialize all outputs to Auto mode on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            for (let i = 0; i < 4; i++) {
+                toggleMode(i);
+            }
+        });
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+{
+  "123456": {
+    "name": "John Doe",
+    "department": "Engineering",
+    "access_level": "full",
+    "active": true,
+    "created_date": "2025-07-17T20:38:58.608838",
+    "last_access": null,
+    "access_times": {
+      "monday": {
+        "start": "08:00",
+        "end": "18:00"
+      },
+      "tuesday": {
+        "start": "08:00",
+        "end": "18:00"
+      },
+      "wednesday": {
+        "start": "08:00",
+        "end": "18:00"
+      },
+      "thursday": {
+        "start": "08:00",
+        "end": "18:00"
+      },
+      "friday": {
+        "start": "08:00",
+        "end": "18:00"
+      },
+      "saturday": null,
+      "sunday": null
+    },
+    "notes": "Default admin user"
+  },
+  "789012": {
+    "name": "Jane Smith",
+    "department": "Security",
+    "access_level": "security",
+    "active": true,
+    "created_date": "2025-07-17T20:38:58.608867",
+    "last_access": null,
+    "access_times": {
+      "monday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "tuesday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "wednesday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "thursday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "friday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "saturday": {
+        "start": "00:00",
+        "end": "23:59"
+      },
+      "sunday": {
+        "start": "00:00",
+        "end": "23:59"
+      }
+    },
+    "notes": "24/7 security access"
+  },
+  "345678": {
+    "name": "Bob Johnson",
+    "department": "Maintenance",
+    "access_level": "limited",
+    "active": false,
+    "created_date": "2025-07-17T20:38:58.608876",
+    "last_access": null,
+    "access_times": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "saturday": null,
+      "sunday": null
+    },
+    "notes": "Access temporarily disabled"
+  }
+}
