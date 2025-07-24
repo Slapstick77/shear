@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shear Operating System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 600px;
+            width: 90%;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .scan-message {
+            font-size: 1.5em;
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.ready {
+            background-color: #28a745;
+        }
+        .status-indicator.waiting {
+            background-color: #ffc107;
+        }
+        .status-indicator.error {
+            background-color: #dc3545;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .button-container {
+            margin-top: 40px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .btn.manager {
+            background: rgba(40, 167, 69, 0.3);
+            border-color: rgba(40, 167, 69, 0.5);
+        }
+        .btn.admin {
+            background: rgba(220, 53, 69, 0.3);
+            border-color: rgba(220, 53, 69, 0.5);
+        }
+        .last-activity {
+            margin-top: 30px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        .card-status {
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+        .admin-access {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(220, 53, 69, 0.3);
+            border: 2px solid rgba(220, 53, 69, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .admin-access:hover {
+            background: rgba(220, 53, 69, 0.5);
+            transform: scale(1.1);
+        }
+        .admin-access.logged-in {
+            background: rgba(40, 167, 69, 0.3);
+            border-color: rgba(40, 167, 69, 0.5);
+        }
+        .admin-access.logged-in:hover {
+            background: rgba(40, 167, 69, 0.5);
+        }
+        .admin-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .admin-panel-content {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            color: white;
+        }
+        .admin-panel input {
+            width: 200px;
+            padding: 10px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        .admin-panel input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .admin-panel button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        .admin-panel button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        /* Testing buttons - for development only */
+        .test-buttons {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+        .test-buttons:hover {
+            opacity: 1;
+        }
+        .test-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            min-width: 70px;
+            color: white;
+            font-weight: bold;
+        }
+        .test-btn.card-001 {
+            background: #dc3545;
+        }
+        .test-btn.card-002 {
+            background: #28a745;
+        }
+        .test-btn.card-003 {
+            background: #007bff;
+        }
+        .test-btn.card-004 {
+            background: #fd7e14;
+        }
+        .test-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Shear Operating System</h1>
+        
+        <div class="card-status">
+            <span class="status-indicator ready" id="status-indicator"></span>
+            <span id="system-status">System Ready</span>
+        </div>
+        
+        <div class="scan-message">
+            <div id="scan-message">Scan Badge to Start Shear</div>
+        </div>
+        
+        <div class="last-activity">
+            <div>Last Activity: <span id="last-activity">None</span></div>
+            <div>System Status: <span id="system-health">All Systems Operational</span></div>
+        </div>
+        
+        <div class="button-container">
+            <!-- Removed Manager and Admin buttons - access now controlled by card scanning -->
+        </div>
+        
+        <!-- Small admin access symbol in corner -->
+        <div class="admin-access" id="admin-access" onclick="handleGearClick()" title="Admin Access">
+            ⚙️
+        </div>
+        
+        <!-- Testing buttons - for development only -->
+        <div class="test-buttons">
+            <button class="test-btn card-001" onclick="simulateCardSwipe('001')" title="Test Card 001">001</button>
+            <button class="test-btn card-002" onclick="simulateCardSwipe('002')" title="Test Card 002">002</button>
+            <button class="test-btn card-003" onclick="simulateCardSwipe('003')" title="Test Card 003">003</button>
+            <button class="test-btn card-004" onclick="simulateCardSwipe('004')" title="Test Card 004">004</button>
+        </div>
+    </div>
+
+    <!-- Hidden admin access panel -->
+    <div id="admin-panel" class="admin-panel" style="display: none;">
+        <div class="admin-panel-content">
+            <h3>Admin Access</h3>
+            <p>Enter admin password:</p>
+            <input type="password" id="admin-password" placeholder="Password">
+            <button onclick="adminLogin()">Login</button>
+            <button onclick="hideAdminAccess()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        let lastCardRead = null;
+        let currentUserRole = null;
+        let currentUserName = null;
+        
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusIndicator = document.getElementById('status-indicator');
+                    const systemStatus = document.getElementById('system-status');
+                    const systemHealth = document.getElementById('system-health');
+                    
+                    // Update system status based on card reader and LabJack
+                    if (data.card_reader.connected && data.labjack_u3.connected) {
+                        statusIndicator.className = 'status-indicator ready';
+                        systemStatus.textContent = 'System Ready';
+                        systemHealth.textContent = 'All Systems Operational';
+                    } else if (data.card_reader.connected || data.labjack_u3.connected) {
+                        statusIndicator.className = 'status-indicator waiting';
+                        systemStatus.textContent = 'Partial System';
+                        systemHealth.textContent = 'Some Systems Offline';
+                    } else {
+                        statusIndicator.className = 'status-indicator error';
+                        systemStatus.textContent = 'System Error';
+                        systemHealth.textContent = 'Systems Offline';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating status:', error);
+                    const statusIndicator = document.getElementById('status-indicator');
+                    const systemStatus = document.getElementById('system-status');
+                    statusIndicator.className = 'status-indicator error';
+                    systemStatus.textContent = 'Connection Error';
+                });
+        }
+        
+        function updateGearSymbol() {
+            const gear = document.getElementById('admin-access');
+            if (currentUserRole === 'admin' || currentUserRole === 'manager') {
+                gear.classList.add('logged-in');
+                gear.title = `${currentUserRole.charAt(0).toUpperCase() + currentUserRole.slice(1)} Access - ${currentUserName}`;
+            } else {
+                gear.classList.remove('logged-in');
+                gear.title = 'Emergency Admin Access';
+            }
+        }
+        
+        function checkForCardRead() {
+            fetch('/api/last-card-read')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.card_id && data.card_id !== lastCardRead) {
+                        lastCardRead = data.card_id;
+                        document.getElementById('scan-message').innerHTML = 
+                            `Card Detected: ${data.card_id}<br>Processing...`;
+                        document.getElementById('last-activity').textContent = 
+                            new Date().toLocaleString();
+                        
+                        // Check user access level for this card
+                        fetch(`/api/card-access/${data.card_id}`)
+                            .then(response => response.json())
+                            .then(accessData => {
+                                if (accessData.success && accessData.access_level) {
+                                    // Store user info for gear symbol
+                                    currentUserRole = accessData.access_level;
+                                    currentUserName = accessData.user_name;
+                                    updateGearSymbol();
+                                    
+                                    // Always show shear unlocked message and stay on operating page
+                                    document.getElementById('scan-message').innerHTML = 
+                                        `Access Granted<br>Shear Unlocked<br>${accessData.user_name}`;
+                                } else {
+                                    // Card not recognized or access denied
+                                    currentUserRole = null;
+                                    currentUserName = null;
+                                    updateGearSymbol();
+                                    document.getElementById('scan-message').innerHTML = 
+                                        `Access Denied<br>Unknown Card`;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error checking card access:', error);
+                                currentUserRole = null;
+                                currentUserName = null;
+                                updateGearSymbol();
+                                document.getElementById('scan-message').innerHTML = 
+                                    `Error Processing Card`;
+                            });
+                        
+                        // Reset message after 5 seconds
+                        setTimeout(() => {
+                            document.getElementById('scan-message').textContent = 
+                                'Scan Badge to Start Shear';
+                        }, 5000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking card read:', error);
+                });
+        }
+        
+        function handleGearClick() {
+            if (currentUserRole === 'admin') {
+                // Admin with green gear - go directly to admin page
+                window.location.href = '/admin';
+            } else if (currentUserRole === 'manager') {
+                // Manager with green gear - go directly to manager page
+                window.location.href = '/manager';
+            } else {
+                // Red gear - show emergency admin login
+                showAdminAccess();
+            }
+        }
+        
+        function showAdminAccess() {
+            document.getElementById('admin-panel').style.display = 'flex';
+            document.getElementById('admin-password').focus();
+        }
+        
+        function hideAdminAccess() {
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('admin-password').value = '';
+        }
+        
+        function adminLogin() {
+            const password = document.getElementById('admin-password').value;
+            
+            fetch('/api/admin-login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '/admin';
+                } else {
+                    alert('Invalid password');
+                    document.getElementById('admin-password').value = '';
+                }
+            })
+            .catch(error => {
+                console.error('Error during admin login:', error);
+                alert('Login error');
+            });
+        }
+        
+        function simulateCardSwipe(cardId) {
+            // Simulate a card swipe by calling the card read endpoint
+            fetch('/api/simulate-card-read', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ card_id: cardId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update last card read to trigger the normal card processing flow
+                    lastCardRead = null; // Reset to force processing
+                    setTimeout(() => {
+                        checkForCardRead();
+                    }, 100);
+                } else {
+                    console.error('Card simulation failed:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error simulating card swipe:', error);
+            });
+        }
+        
+        // Handle Enter key in admin password field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('admin-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    adminLogin();
+                }
+            });
+        });
+        
+        // Update status every 5 seconds
+        setInterval(updateStatus, 5000);
+        setInterval(checkForCardRead, 1000);
+        
+        // Initial load
+        updateStatus();
+        checkForCardRead();
+    </script>
+</body>
+</html>

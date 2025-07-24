@@ -173,8 +173,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>✂️ Shear Access Control System</h1>
-            <p>USB HID Card Reader with PowerApp Dataverse Integration</p>
+            <h1>Shear Access Control System</h1>
+            <p>USB HID Card Reader Integration</p>
         </div>
         
         <div class="status-grid">
@@ -196,7 +196,6 @@
                 <p><strong>Status:</strong> {{ 'Connected' if labjack_status else 'Disconnected' }}</p>
                 <p><strong>Device:</strong> <span id="labjack-device">Checking...</span></p>
                 <p><strong>Temperature:</strong> <span id="temperature">--°C</span></p>
-                <p><strong>Shear:</strong> <span id="shear-status">Unknown</span></p>
             </div>
             
             <div class="status-card">
@@ -266,14 +265,6 @@
             <button class="btn" onclick="refreshStatus()">Refresh Status</button>
             <button class="btn" onclick="viewLogs()">View Logs</button>
             <button class="btn danger" onclick="clearLogs()">Clear Logs</button>
-            
-            <h4>LabJack U3 Controls</h4>
-            <button class="btn success" onclick="unlockShear()">🔓 Unlock Shear</button>
-            <button class="btn danger" onclick="lockShear()">🔒 Force Lock Shear</button>
-            <button class="btn" onclick="toggleLED('green')">💚 Green LED</button>
-            <button class="btn" onclick="toggleLED('red')">❤️ Red LED</button>
-            <button class="btn" onclick="toggleLED('blue')">💙 Blue LED</button>
-            <button class="btn" onclick="readSensors()">📊 Read Sensors</button>
         </div>
         
         <div class="logs">

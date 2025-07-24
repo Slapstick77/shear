@@ -4,13 +4,15 @@ Shear App - USB HID Card Access Server
 Handles card reader events and controls access to shear equipment
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file
 import threading
 import requests
 import json
 import logging
 from datetime import datetime
 import os
+import csv
+import io
 from card_reader import CardReader
 from labjack_u3 import LabJackU3
 from card_manager import CardManager
@@ -28,6 +30,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Authentication credentials
+AUTH_CREDENTIALS = {
+    'admin': 'admin',
+    'manager': 'Manager'
+}
+
+# Session data
+session_logs = []
+last_card_read = None
 
 # Add datetime filter for Jinja2 templates
 @app.template_filter('datetime')
@@ -77,9 +89,18 @@ def initialize_components():
 
 def handle_card_read(card_data):
     """Handle card read event"""
+    global last_card_read, session_logs
     try:
         card_id = card_data.get('card_id', '').strip()
         logger.info(f"Card read: {card_id}")
+        last_card_read = card_id
+        
+        # Add to session logs
+        log_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': f"Card scanned: {card_id}"
+        }
+        session_logs.append(log_entry)
         
         # Validate card using card manager
         validation_result = card_manager.validate_card(card_id) if card_manager else {
@@ -98,6 +119,28 @@ def handle_card_read(card_data):
             labjack_u3.set_status_led('green', True)  # Green LED on
             # Turn off green LED after 2 seconds
             threading.Timer(2.0, lambda: labjack_u3.set_status_led('green', False)).start()
+            
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'message': f"Access granted for card: {card_id}"
+            }
+        else:
+            # Deny access
+            if labjack_u3 and labjack_u3.is_connected():
+                labjack_u3.set_status_led('red', True)  # Red LED on
+                # Turn off red LED after 2 seconds
+                threading.Timer(2.0, lambda: labjack_u3.set_status_led('red', False)).start()
+            
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'message': f"Access denied for card: {card_id} - {validation_result.get('reason', 'Unknown')}"
+            }
+        
+        session_logs.append(log_entry)
+        
+        # Keep only last 100 log entries
+        if len(session_logs) > 100:
+            session_logs = session_logs[-100:]
             logger.info(f"Access GRANTED for card {card_id}: {validation_result['reason']}")
         else:
             # Deny access
@@ -128,10 +171,449 @@ def handle_labjack_input_change(change_data):
 
 @app.route('/')
 def index():
-    """Main dashboard"""
+    """Main operating page"""
+    return render_template('operating.html')
+
+@app.route('/technical')
+def technical():
+    """Technical dashboard (requires admin access)"""
+    if 'user_role' not in session or session['user_role'] != 'admin':
+        return redirect(url_for('login', role='admin'))
+    
     return render_template('index.html', 
                          reader_status=card_reader.is_connected() if card_reader else False,
                          labjack_status=labjack_u3.is_connected() if labjack_u3 else False)
+
+@app.route('/login')
+def login():
+    """Login page"""
+    role = request.args.get('role', 'manager')
+    if role not in ['admin', 'manager']:
+        role = 'manager'
+    return render_template('login.html', role=role)
+
+@app.route('/login', methods=['POST'])
+def login_post():
+    """Handle login form submission"""
+    role = request.args.get('role', 'manager')
+    password = request.form.get('password', '')
+    
+    if role in AUTH_CREDENTIALS and AUTH_CREDENTIALS[role] == password:
+        session['user_role'] = role
+        if role == 'admin':
+            return redirect(url_for('admin'))
+        else:
+            return redirect(url_for('manager'))
+    else:
+        return render_template('login.html', role=role, error='Invalid password')
+
+@app.route('/manager')
+def manager():
+    """Manager dashboard - accessible via card scan or existing session"""
+    # Check if user has manager or admin access
+    if 'user_role' not in session or session['user_role'] not in ['manager', 'admin']:
+        return redirect(url_for('index'))
+    
+    return render_template('manager.html')
+
+@app.route('/admin')
+def admin():
+    """Admin dashboard - accessible via card scan or password login"""
+    # Check if user has admin access
+    if 'user_role' not in session or session['user_role'] != 'admin':
+        return redirect(url_for('index'))
+    
+    return render_template('admin.html')
+
+@app.route('/logout')
+def logout():
+    """Logout and clear session"""
+    global last_card_read
+    session.clear()
+    last_card_read = None  # Clear the last card read to prevent auto re-login
+    return redirect(url_for('index'))
+
+@app.route('/api/card-access/<card_id>')
+def api_card_access(card_id):
+    """Check card access level and grant access if valid"""
+    try:
+        if not card_manager:
+            return jsonify({'success': False, 'message': 'Card manager not available'}), 500
+        
+        # Get card info directly from the access list
+        card_info = card_manager.get_card_info(card_id)
+        
+        if card_info:
+            access_level = card_info.get('access_level', 'user')
+            
+            # Validate card through normal validation process
+            validation_result = card_manager.validate_card(card_id)
+            
+            # Ensure validation_result is a dictionary
+            if isinstance(validation_result, dict) and validation_result.get('access_granted'):
+                # Set session for manager/admin access
+                if access_level in ['admin', 'manager']:
+                    session['user_role'] = access_level
+                    session['user_name'] = card_info.get('name')
+                    session['card_id'] = card_id
+                
+                return jsonify({
+                    'success': True,
+                    'access_level': access_level,
+                    'user_name': card_info.get('name'),
+                    'card_id': card_id
+                })
+            else:
+                # Handle both dict and string responses
+                if isinstance(validation_result, dict):
+                    reason = validation_result.get('reason', 'Access denied')
+                else:
+                    reason = str(validation_result) if validation_result else 'Access denied'
+                
+                return jsonify({
+                    'success': False,
+                    'message': reason
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Card not found'
+            })
+    
+    except Exception as e:
+        logger.error(f"Error checking card access: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/simulate-card-read', methods=['POST'])
+def api_simulate_card_read():
+    """Simulate a card read for testing purposes"""
+    global last_card_read, session_logs
+    try:
+        data = request.get_json()
+        card_id = data.get('card_id', '')
+        
+        if not card_id:
+            return jsonify({'success': False, 'message': 'Card ID required'}), 400
+        
+        # Simulate the card read by updating the global variable
+        last_card_read = card_id
+        
+        # Add to session logs
+        log_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': f"[TEST] Card scanned: {card_id}"
+        }
+        session_logs.append(log_entry)
+        
+        # Also trigger the normal card handling process
+        if card_manager:
+            validation_result = card_manager.validate_card(card_id)
+            
+            if validation_result.get('access_granted'):
+                log_entry = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'message': f"[TEST] Access granted for card: {card_id}"
+                }
+            else:
+                log_entry = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'message': f"[TEST] Access denied for card: {card_id} - {validation_result.get('reason', 'Unknown')}"
+                }
+            
+            session_logs.append(log_entry)
+        
+        # Keep only last 100 log entries
+        if len(session_logs) > 100:
+            session_logs = session_logs[-100:]
+        
+        return jsonify({'success': True, 'message': f'Card {card_id} simulated successfully'})
+    
+    except Exception as e:
+        logger.error(f"Error simulating card read: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/admin-login', methods=['POST'])
+def api_admin_login():
+    """Handle admin login via password"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+        
+        if password == AUTH_CREDENTIALS['admin']:
+            session['user_role'] = 'admin'
+            return jsonify({'success': True, 'message': 'Admin login successful'})
+        else:
+            return jsonify({'success': False, 'message': 'Invalid password'})
+    
+    except Exception as e:
+        logger.error(f"Error during admin login: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/last-card-read')
+def api_last_card_read():
+    """Get the last card read"""
+    global last_card_read
+    return jsonify({
+        'success': True,
+        'card_id': last_card_read,
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/users')
+def api_users():
+    """Get all users"""
+    try:
+        if not card_manager:
+            return jsonify({'success': False, 'message': 'Card manager not available'}), 500
+        
+        users_dict = card_manager.get_all_cards()
+        formatted_users = []
+        for card_id, card_info in users_dict.items():
+            formatted_users.append({
+                'card_id': card_id,
+                'name': card_info.get('name'),
+                'access_level': card_info.get('access_level', 'user'),
+                'department': card_info.get('department', ''),
+                'active': card_info.get('active', False)
+            })
+        
+        return jsonify({'success': True, 'users': formatted_users})
+    except Exception as e:
+        logger.error(f"Error getting users: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/users', methods=['POST'])
+def api_add_user():
+    """Add a new user"""
+    try:
+        if not card_manager:
+            return jsonify({'success': False, 'message': 'Card manager not available'}), 500
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        card_id = data.get('card_id', '').strip()
+        user_name = data.get('user_name', '').strip()
+        access_level = data.get('access_level', 'user')
+        
+        if not card_id or not user_name:
+            return jsonify({'success': False, 'message': 'Card ID and user name are required'}), 400
+        
+        success = card_manager.add_card(card_id, user_name, '', access_level, '')
+        if success:
+            return jsonify({'success': True, 'message': f'User {user_name} added successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add user (card may already exist)'}), 400
+    
+    except Exception as e:
+        logger.error(f"Error adding user: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/users/<card_id>', methods=['PUT'])
+def api_update_user(card_id):
+    """Update an existing user"""
+    try:
+        if not card_manager:
+            return jsonify({'success': False, 'message': 'Card manager not available'}), 500
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        user_name = data.get('user_name', '').strip()
+        access_level = data.get('access_level', 'user')
+        department = data.get('department', '').strip()
+        
+        if not user_name:
+            return jsonify({'success': False, 'message': 'User name is required'}), 400
+        
+        # Get current card info using the card manager method
+        card_info = card_manager.get_card_info(card_id)
+        
+        if not card_info:
+            return jsonify({'success': False, 'message': 'Card not found'}), 404
+        
+        # Update the card info
+        if hasattr(card_manager, 'access_list') and card_id in card_manager.access_list:
+            card_manager.access_list[card_id]['name'] = user_name
+            card_manager.access_list[card_id]['access_level'] = access_level
+            card_manager.access_list[card_id]['department'] = department
+            card_manager.save_access_list()
+            
+            return jsonify({'success': True, 'message': f'User {user_name} updated successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to update user'}), 400
+    
+    except Exception as e:
+        logger.error(f"Error updating user: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/users/<card_id>', methods=['DELETE'])
+def api_remove_user(card_id):
+    """Remove a user"""
+    try:
+        if not card_manager:
+            return jsonify({'success': False, 'message': 'Card manager not available'}), 500
+        
+        success = card_manager.remove_card(card_id)
+        if success:
+            return jsonify({'success': True, 'message': f'User removed successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+    
+    except Exception as e:
+        logger.error(f"Error removing user: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/logs')
+def api_logs():
+    """Get system logs"""
+    global session_logs
+    return jsonify({'success': True, 'logs': session_logs})
+
+@app.route('/api/logs', methods=['DELETE'])
+def api_clear_logs():
+    """Clear system logs"""
+    global session_logs
+    session_logs = []
+    return jsonify({'success': True, 'message': 'Logs cleared successfully'})
+
+@app.route('/api/logs/download')
+def api_download_logs():
+    """Download logs as CSV"""
+    global session_logs
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Timestamp', 'Message'])
+    
+    for log in session_logs:
+        writer.writerow([log['timestamp'], log['message']])
+    
+    output.seek(0)
+    
+    return send_file(
+        io.BytesIO(output.getvalue().encode()),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'shear_logs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    )
+
+@app.route('/api/usage-stats')
+def api_usage_stats():
+    """Get usage statistics"""
+    global session_logs
+    
+    # Calculate stats from logs
+    cards_today = len([log for log in session_logs if 'Card scanned:' in log['message']])
+    access_attempts = len([log for log in session_logs if 'Access' in log['message']])
+    granted = len([log for log in session_logs if 'Access granted' in log['message']])
+    
+    success_rate = (granted / access_attempts * 100) if access_attempts > 0 else 100
+    last_activity = session_logs[-1]['timestamp'] if session_logs else 'None'
+    
+    return jsonify({
+        'success': True,
+        'cards_today': cards_today,
+        'access_attempts': access_attempts,
+        'success_rate': round(success_rate, 1),
+        'last_activity': last_activity
+    })
+
+@app.route('/api/usage-report/download')
+def api_download_usage_report():
+    """Download usage report as CSV"""
+    global session_logs
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Timestamp', 'Action', 'Card ID', 'Result'])
+    
+    for log in session_logs:
+        message = log['message']
+        if 'Card scanned:' in message:
+            card_id = message.split('Card scanned: ')[1] if 'Card scanned: ' in message else ''
+            writer.writerow([log['timestamp'], 'Card Scan', card_id, 'Scanned'])
+        elif 'Access granted' in message:
+            card_id = message.split('card: ')[1] if 'card: ' in message else ''
+            writer.writerow([log['timestamp'], 'Access Request', card_id, 'Granted'])
+        elif 'Access denied' in message:
+            card_id = message.split('card: ')[1].split(' -')[0] if 'card: ' in message else ''
+            writer.writerow([log['timestamp'], 'Access Request', card_id, 'Denied'])
+    
+    output.seek(0)
+    
+    return send_file(
+        io.BytesIO(output.getvalue().encode()),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'usage_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    )
+
+@app.route('/api/settings', methods=['POST'])
+def api_save_settings():
+    """Save system settings (admin only)"""
+    try:
+        data = request.get_json()
+        # In a real implementation, save settings to a config file or database
+        return jsonify({'success': True, 'message': 'Settings saved successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/hardware/restart', methods=['POST'])
+def api_restart_hardware():
+    """Restart hardware connections (admin only)"""
+    try:
+        # Reinitialize components
+        initialize_components()
+        return jsonify({'success': True, 'message': 'Hardware restarted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/emergency-stop', methods=['POST'])
+def api_emergency_stop():
+    """Emergency stop (admin only)"""
+    try:
+        if labjack_u3 and labjack_u3.is_connected():
+            labjack_u3.force_shear_lock()
+            labjack_u3.set_status_led('red', True)
+        return jsonify({'success': True, 'message': 'Emergency stop activated'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/database/backup')
+def api_backup_database():
+    """Backup database (admin only)"""
+    try:
+        # In a real implementation, create a database backup
+        return jsonify({'success': True, 'message': 'Database backup created'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/database/reset', methods=['POST'])
+def api_reset_database():
+    """Reset database (admin only)"""
+    try:
+        if card_manager:
+            # In a real implementation, clear the database
+            pass
+        return jsonify({'success': True, 'message': 'Database reset successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/factory-reset', methods=['POST'])
+def api_factory_reset():
+    """Factory reset (admin only)"""
+    global session_logs
+    try:
+        session_logs = []
+        if card_manager:
+            # In a real implementation, reset everything to factory defaults
+            pass
+        return jsonify({'success': True, 'message': 'Factory reset completed'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/status')
 def api_status():

@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Shear System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .nav-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background: #007bff;
+            color: white;
+        }
+        .nav-btn.active {
+            background: #007bff;
+            color: white;
+        }
+        .nav-btn.logout {
+            background: #dc3545;
+            color: white;
+            margin-left: auto;
+        }
+        .nav-btn.logout:hover {
+            background: #c82333;
+        }
+        .content {
+            padding: 20px;
+        }
+        .section {
+            display: none;
+            margin-bottom: 30px;
+        }
+        .section.active {
+            display: block;
+        }
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc3545;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.danger {
+            background: #dc3545;
+        }
+        .btn.warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        .user-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .logs-container {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        .log-timestamp {
+            color: #666;
+        }
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Admin Dashboard</h1>
+            <p>Full System Administration</p>
+        </div>
+        
+        <div class="nav-bar">
+            <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
+            <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
+            <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
+            <a href="#" class="nav-btn" onclick="showSection('settings')">Settings</a>
+            <a href="/technical" class="nav-btn">Technical View</a>
+            <a href="/" class="nav-btn">← Back to Operating</a>
+            <a href="/logout" class="nav-btn logout">Logout</a>
+        </div>
+        
+        <div class="content">
+            <!-- Users Section -->
+            <div id="users" class="section active">
+                <div class="card">
+                    <h3>Add New User</h3>
+                    <form id="add-user-form">
+                        <div class="form-group">
+                            <label for="card_id">Card ID:</label>
+                            <input type="text" id="card_id" name="card_id" placeholder="Enter card ID" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="user_name">User Name:</label>
+                            <input type="text" id="user_name" name="user_name" placeholder="Enter user name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="access_level">Access Level:</label>
+                            <select id="access_level" name="access_level">
+                                <option value="user">User</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="department">Department (Optional):</label>
+                            <input type="text" id="department" name="department" placeholder="Enter department">
+                        </div>
+                        <button type="submit" id="addUserBtn" class="btn success">Add User</button>
+                        <button type="button" id="updateUserBtn" class="btn" onclick="updateUser()" style="display: none; background-color: #28a745; color: white;">Update User</button>
+                        <button type="button" id="cancelEditBtn" class="btn" onclick="cancelEdit()" style="display: none; background-color: #6c757d; color: white;">Cancel</button>
+                    </form>
+                </div>
+                
+                <div class="card">
+                    <h3>Current Users</h3>
+                    <div class="user-list" id="user-list">
+                        <div class="user-item">
+                            <div>Loading users...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Logs Section -->
+            <div id="logs" class="section">
+                <div class="card">
+                    <h3>System Logs</h3>
+                    <div style="margin-bottom: 10px;">
+                        <button class="btn" onclick="refreshLogs()">Refresh Logs</button>
+                        <button class="btn" onclick="downloadLogs()">Download Logs</button>
+                        <button class="btn danger" onclick="clearLogs()">Clear Logs</button>
+                    </div>
+                    <div class="logs-container" id="logs-container">
+                        <div class="log-entry">Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Usage Section -->
+            <div id="usage" class="section">
+                <div class="card">
+                    <h3>Usage Statistics</h3>
+                    <div id="usage-stats">
+                        <p><strong>Total Cards Read Today:</strong> <span id="cards-today">0</span></p>
+                        <p><strong>Total Access Attempts:</strong> <span id="access-attempts">0</span></p>
+                        <p><strong>Success Rate:</strong> <span id="success-rate">100%</span></p>
+                        <p><strong>Last Activity:</strong> <span id="last-activity">None</span></p>
+                    </div>
+                    <button class="btn" onclick="downloadUsageReport()">Download Usage Report</button>
+                </div>
+            </div>
+            
+            <!-- Settings Section (Admin Only) -->
+            <div id="settings" class="section">
+                <div class="settings-grid">
+                    <div class="card">
+                        <h3>System Settings</h3>
+                        <div class="setting-item">
+                            <div>Auto-lock timeout:</div>
+                            <input type="number" id="auto-lock-timeout" value="30" min="1" max="300">
+                        </div>
+                        <div class="setting-item">
+                            <div>Card read timeout:</div>
+                            <input type="number" id="card-timeout" value="5" min="1" max="60">
+                        </div>
+                        <div class="setting-item">
+                            <div>Enable logging:</div>
+                            <input type="checkbox" id="enable-logging" checked>
+                        </div>
+                        <button class="btn success" onclick="saveSettings()">Save Settings</button>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Hardware Control</h3>
+                        <div class="setting-item">
+                            <div>LabJack Status:</div>
+                            <span id="labjack-status">Checking...</span>
+                        </div>
+                        <div class="setting-item">
+                            <div>Card Reader Status:</div>
+                            <span id="reader-status">Checking...</span>
+                        </div>
+                        <button class="btn warning" onclick="restartHardware()">Restart Hardware</button>
+                        <button class="btn danger" onclick="emergencyStop()">Emergency Stop</button>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Password Management</h3>
+                        <form id="password-form">
+                            <div class="form-group">
+                                <label for="role-select">Role:</label>
+                                <select id="role-select" name="role">
+                                    <option value="admin">Admin</option>
+                                    <option value="manager">Manager</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-password">New Password:</label>
+                                <input type="password" id="new-password" name="password" required>
+                            </div>
+                            <button type="submit" class="btn warning">Change Password</button>
+                        </form>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Database Management</h3>
+                        <button class="btn" onclick="backupDatabase()">Backup Database</button>
+                        <button class="btn warning" onclick="resetDatabase()">Reset Database</button>
+                        <button class="btn danger" onclick="factoryReset()">Factory Reset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Include all the functions from manager.html
+        function showSection(sectionName) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(sectionName).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (sectionName === 'users') {
+                loadUsers();
+            } else if (sectionName === 'logs') {
+                loadLogs();
+            } else if (sectionName === 'usage') {
+                loadUsageStats();
+            } else if (sectionName === 'settings') {
+                loadSettings();
+            }
+        }
+        
+        function loadUsers() {
+            fetch('/api/users')
+                .then(response => response.json())
+                .then(data => {
+                    const userList = document.getElementById('user-list');
+                    if (data.success && data.users.length > 0) {
+                        userList.innerHTML = `
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background-color: #f5f5f5;">
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Card ID</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Name</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Access Level</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Department</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.users.map(user => `
+                                        <tr data-card-id="${user.card_id}">
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.card_id}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.name}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.access_level}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.department || ''}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                                                <button class="btn" onclick="editUser('${user.card_id}')" style="margin-right: 5px; background-color: #007bff; color: white;">Edit</button>
+                                                <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    } else {
+                        userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading users:', error);
+                    document.getElementById('user-list').innerHTML = '<div class="user-item"><div>Error loading users</div></div>';
+                });
+        }
+        
+        function loadLogs() {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(data => {
+                    const logsContainer = document.getElementById('logs-container');
+                    if (data.success && data.logs.length > 0) {
+                        logsContainer.innerHTML = data.logs.map(log => `
+                            <div class="log-entry">
+                                <span class="log-timestamp">[${log.timestamp}]</span> ${log.message}
+                            </div>
+                        `).join('');
+                    } else {
+                        logsContainer.innerHTML = '<div class="log-entry">No logs available</div>';
+                    }
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                })
+                .catch(error => {
+                    console.error('Error loading logs:', error);
+                    document.getElementById('logs-container').innerHTML = '<div class="log-entry">Error loading logs</div>';
+                });
+        }
+        
+        function loadUsageStats() {
+            fetch('/api/usage-stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('cards-today').textContent = data.cards_today || 0;
+                        document.getElementById('access-attempts').textContent = data.access_attempts || 0;
+                        document.getElementById('success-rate').textContent = (data.success_rate || 100) + '%';
+                        document.getElementById('last-activity').textContent = data.last_activity || 'None';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading usage stats:', error);
+                });
+        }
+        
+        function loadSettings() {
+            // Load hardware status
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('labjack-status').textContent = 
+                        data.labjack_u3.connected ? 'Connected' : 'Disconnected';
+                    document.getElementById('reader-status').textContent = 
+                        data.card_reader.connected ? 'Connected' : 'Disconnected';
+                })
+                .catch(error => {
+                    console.error('Error loading hardware status:', error);
+                });
+        }
+        
+        // Add user form submission
+        document.getElementById('add-user-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const userData = {
+                card_id: formData.get('card_id'),
+                user_name: formData.get('user_name'),
+                access_level: formData.get('access_level')
+            };
+            
+            fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(userData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('User added successfully');
+                    e.target.reset();
+                    loadUsers();
+                } else {
+                    alert('Error adding user: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error adding user: ' + error.message);
+            });
+        });
+        
+        function editUser(cardId) {
+            const row = document.querySelector(`tr[data-card-id="${cardId}"]`);
+            const name = row.cells[1].textContent;
+            const accessLevel = row.cells[2].textContent;
+            const department = row.cells[3].textContent;
+            
+            document.getElementById('card_id').value = cardId;
+            document.getElementById('user_name').value = name;
+            document.getElementById('access_level').value = accessLevel.toLowerCase();
+            document.getElementById('department').value = department;
+            
+            document.getElementById('addUserBtn').style.display = 'none';
+            document.getElementById('updateUserBtn').style.display = 'inline-block';
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        }
+        
+        function cancelEdit() {
+            document.getElementById('add-user-form').reset();
+            document.getElementById('addUserBtn').style.display = 'inline-block';
+            document.getElementById('updateUserBtn').style.display = 'none';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+        }
+        
+        function updateUser() {
+            const cardId = document.getElementById('card_id').value;
+            const userData = {
+                user_name: document.getElementById('user_name').value,
+                access_level: document.getElementById('access_level').value,
+                department: document.getElementById('department').value
+            };
+            
+            fetch(`/api/users/${cardId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(userData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('User updated successfully!');
+                    cancelEdit();
+                    loadUsers();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating user');
+            });
+        }
+
+        function removeUser(cardId) {
+            if (confirm('Are you sure you want to remove this user?')) {
+                fetch(`/api/users/${cardId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('User removed successfully');
+                        loadUsers();
+                    } else {
+                        alert('Error removing user: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error removing user: ' + error.message);
+                });
+            }
+        }
+        
+        function saveSettings() {
+            const settings = {
+                auto_lock_timeout: document.getElementById('auto-lock-timeout').value,
+                card_timeout: document.getElementById('card-timeout').value,
+                enable_logging: document.getElementById('enable-logging').checked
+            };
+            
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Settings saved successfully');
+                } else {
+                    alert('Error saving settings: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error saving settings: ' + error.message);
+            });
+        }
+        
+        function restartHardware() {
+            if (confirm('Are you sure you want to restart hardware connections?')) {
+                fetch('/api/hardware/restart', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    loadSettings();
+                })
+                .catch(error => {
+                    alert('Error restarting hardware: ' + error.message);
+                });
+            }
+        }
+        
+        function emergencyStop() {
+            if (confirm('Are you sure you want to trigger emergency stop?')) {
+                fetch('/api/emergency-stop', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                })
+                .catch(error => {
+                    alert('Error triggering emergency stop: ' + error.message);
+                });
+            }
+        }
+        
+        function refreshLogs() {
+            loadLogs();
+        }
+        
+        function downloadLogs() {
+            window.open('/api/logs/download', '_blank');
+        }
+        
+        function clearLogs() {
+            if (confirm('Are you sure you want to clear all logs?')) {
+                fetch('/api/logs', {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Logs cleared successfully');
+                        loadLogs();
+                    } else {
+                        alert('Error clearing logs: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error clearing logs: ' + error.message);
+                });
+            }
+        }
+        
+        function downloadUsageReport() {
+            window.open('/api/usage-report/download', '_blank');
+        }
+        
+        function backupDatabase() {
+            window.open('/api/database/backup', '_blank');
+        }
+        
+        function resetDatabase() {
+            if (confirm('Are you sure you want to reset the database? This will remove all users and logs.')) {
+                fetch('/api/database/reset', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    loadUsers();
+                })
+                .catch(error => {
+                    alert('Error resetting database: ' + error.message);
+                });
+            }
+        }
+        
+        function factoryReset() {
+            if (confirm('Are you sure you want to perform a factory reset? This will reset ALL settings and data.')) {
+                if (confirm('This action cannot be undone. Are you absolutely sure?')) {
+                    fetch('/api/factory-reset', {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        window.location.href = '/';
+                    })
+                    .catch(error => {
+                        alert('Error performing factory reset: ' + error.message);
+                    });
+                }
+            }
+        }
+        
+        // Load initial data
+        loadUsers();
+    </script>
+</body>
+</html>

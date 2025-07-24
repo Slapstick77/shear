@@ -46,46 +46,50 @@ class CardManager:
     def create_default_access_list(self):
         """Create a default access list with sample cards"""
         self.access_list = {
-            "123456": {
-                "name": "John Doe",
-                "department": "Engineering",
-                "access_level": "full",
+            "001": {
+                "name": "Test Admin",
+                "department": "Administration",
+                "access_level": "admin",
                 "active": True,
                 "created_date": datetime.now().isoformat(),
                 "last_access": None,
-                "access_times": {
-                    "monday": {"start": "08:00", "end": "18:00"},
-                    "tuesday": {"start": "08:00", "end": "18:00"},
-                    "wednesday": {"start": "08:00", "end": "18:00"},
-                    "thursday": {"start": "08:00", "end": "18:00"},
-                    "friday": {"start": "08:00", "end": "18:00"},
-                    "saturday": None,
-                    "sunday": None
-                },
-                "notes": "Default admin user"
+                "access_times": None,  # No time restrictions - 24/7 access
+                "notes": "Test admin card - full access"
             },
-            "789012": {
-                "name": "Jane Smith",
-                "department": "Security",
-                "access_level": "security",
+            "002": {
+                "name": "Test Manager",
+                "department": "Management",
+                "access_level": "manager",
                 "active": True,
                 "created_date": datetime.now().isoformat(),
                 "last_access": None,
-                "access_times": {
-                    "monday": {"start": "00:00", "end": "23:59"},
-                    "tuesday": {"start": "00:00", "end": "23:59"},
-                    "wednesday": {"start": "00:00", "end": "23:59"},
-                    "thursday": {"start": "00:00", "end": "23:59"},
-                    "friday": {"start": "00:00", "end": "23:59"},
-                    "saturday": {"start": "00:00", "end": "23:59"},
-                    "sunday": {"start": "00:00", "end": "23:59"}
-                },
-                "notes": "24/7 security access"
+                "access_times": None,  # No time restrictions - 24/7 access
+                "notes": "Test manager card"
+            },
+            "003": {
+                "name": "Test User",
+                "department": "Operations",
+                "access_level": "user",
+                "active": True,
+                "created_date": datetime.now().isoformat(),
+                "last_access": None,
+                "access_times": None,  # No time restrictions - 24/7 access
+                "notes": "Test user card - basic access"
+            },
+            "004": {
+                "name": "Test User 2",
+                "department": "Operations",
+                "access_level": "user",
+                "active": True,
+                "created_date": datetime.now().isoformat(),
+                "last_access": None,
+                "access_times": None,  # No time restrictions - 24/7 access
+                "notes": "Test user card - basic access"
             },
             "345678": {
                 "name": "Bob Johnson",
                 "department": "Maintenance",
-                "access_level": "limited",
+                "access_level": "user",
                 "active": False,
                 "created_date": datetime.now().isoformat(),
                 "last_access": None,
@@ -156,11 +160,16 @@ class CardManager:
     def _check_time_access(self, user: Dict[str, Any]) -> bool:
         """Check if current time is within allowed access hours"""
         try:
+            access_times = user.get('access_times')
+            
+            # If access_times is None, allow 24/7 access
+            if access_times is None:
+                return True
+            
             now = datetime.now()
             current_day = now.strftime('%A').lower()
             current_time = now.strftime('%H:%M')
             
-            access_times = user.get('access_times', {})
             day_access = access_times.get(current_day)
             
             # If no access defined for this day, deny access

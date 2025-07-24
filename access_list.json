@@ -1,107 +1,42 @@
 {
-  "123456": {
-    "name": "John Doe",
-    "department": "Engineering",
-    "access_level": "full",
+  "001": {
+    "name": "Test Admin",
+    "department": "Administration",
+    "access_level": "admin",
     "active": true,
-    "created_date": "2025-07-17T20:38:58.608838",
-    "last_access": null,
-    "access_times": {
-      "monday": {
-        "start": "08:00",
-        "end": "18:00"
-      },
-      "tuesday": {
-        "start": "08:00",
-        "end": "18:00"
-      },
-      "wednesday": {
-        "start": "08:00",
-        "end": "18:00"
-      },
-      "thursday": {
-        "start": "08:00",
-        "end": "18:00"
-      },
-      "friday": {
-        "start": "08:00",
-        "end": "18:00"
-      },
-      "saturday": null,
-      "sunday": null
-    },
-    "notes": "Default admin user"
+    "created_date": "2025-07-24T23:33:17.104425",
+    "last_access": "2025-07-24T23:46:43.346325",
+    "access_times": null,
+    "notes": "Test admin card - full access"
   },
-  "789012": {
-    "name": "Jane Smith",
-    "department": "Security",
-    "access_level": "security",
+  "002": {
+    "name": "Test Manager",
+    "department": "Management",
+    "access_level": "manager",
     "active": true,
-    "created_date": "2025-07-17T20:38:58.608867",
-    "last_access": null,
-    "access_times": {
-      "monday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "tuesday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "wednesday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "thursday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "friday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "saturday": {
-        "start": "00:00",
-        "end": "23:59"
-      },
-      "sunday": {
-        "start": "00:00",
-        "end": "23:59"
-      }
-    },
-    "notes": "24/7 security access"
+    "created_date": "2025-07-24T23:33:17.104450",
+    "last_access": "2025-07-24T23:46:38.165450",
+    "access_times": null,
+    "notes": "Test manager card"
   },
-  "345678": {
-    "name": "Bob Johnson",
-    "department": "Maintenance",
-    "access_level": "limited",
-    "active": false,
-    "created_date": "2025-07-17T20:38:58.608876",
-    "last_access": null,
-    "access_times": {
-      "monday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "tuesday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "wednesday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "thursday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "friday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "saturday": null,
-      "sunday": null
-    },
-    "notes": "Access temporarily disabled"
+  "003": {
+    "name": "Test User",
+    "department": "Operations",
+    "access_level": "user",
+    "active": true,
+    "created_date": "2025-07-24T23:33:17.104456",
+    "last_access": "2025-07-24T23:38:37.391603",
+    "access_times": null,
+    "notes": "Test user card - basic access"
+  },
+  "004": {
+    "name": "Test User 2",
+    "department": "Operations",
+    "access_level": "user",
+    "active": true,
+    "created_date": "2025-07-24T23:33:17.104461",
+    "last_access": "2025-07-24T23:46:55.803664",
+    "access_times": null,
+    "notes": "Test user card - basic access"
   }
 }
