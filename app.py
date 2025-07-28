@@ -37,9 +37,19 @@ AUTH_CREDENTIALS = {
     'manager': 'Manager'
 }
 
+# Shear control settings
+SHEAR_SETTINGS = {
+    'unlock_timeout': 120,  # Default 2 minutes in seconds
+    'shear_output_pin': 'FIO6',  # LabJack output pin for shear control
+    'motion_input_pin': 'FIO4',  # LabJack input pin for motion detection
+    'error_action': 'unlock',  # Options: 'unlock', 'lock', 'maintain'
+}
+
 # Session data
 session_logs = []
 last_card_read = None
+shear_unlock_timer = None
+shear_unlocked = False
 
 # Add datetime filter for Jinja2 templates
 @app.template_filter('datetime')
@@ -78,7 +88,7 @@ def initialize_components():
             if connection_success:
                 logger.info("LabJack U3 connected successfully")
                 # Start monitoring loop for FIO4 and FIO5 states
-                threading.Thread(target=labjack_u3.monitor_inputs, daemon=True).start()
+                labjack_u3.start_monitoring()
                 logger.info("Started LabJack U3 input monitoring loop")
             else:
                 logger.warning("LabJack U3 connection failed - device may not be connected or driver not installed")
@@ -89,7 +99,7 @@ def initialize_components():
 
 def handle_card_read(card_data):
     """Handle card read event"""
-    global last_card_read, session_logs
+    global last_card_read, session_logs, shear_unlock_timer, shear_unlocked
     try:
         card_id = card_data.get('card_id', '').strip()
         logger.info(f"Card read: {card_id}")
@@ -107,22 +117,14 @@ def handle_card_read(card_data):
             'valid': False, 'access_granted': False, 'reason': 'Card manager not available'
         }
         
-        # Check shear sensor and motion detection via LabJack
-        shear_locked = labjack_u3.read_shear_sensor() if labjack_u3 and labjack_u3.is_connected() else True
-        motion_detected = labjack_u3.read_motion_sensor() if labjack_u3 and labjack_u3.is_connected() else False
-        temperature = labjack_u3.read_temperature_sensor() if labjack_u3 and labjack_u3.is_connected() else None
-        
-        # Control shear and LEDs based on access decision
-        if validation_result['access_granted'] and labjack_u3 and labjack_u3.is_connected():
-            # Grant access
-            labjack_u3.trigger_shear_unlock(duration=3.0)  # Unlock for 3 seconds
-            labjack_u3.set_status_led('green', True)  # Green LED on
-            # Turn off green LED after 2 seconds
-            threading.Timer(2.0, lambda: labjack_u3.set_status_led('green', False)).start()
+        # Control shear based on access decision
+        if validation_result['access_granted']:
+            # Grant access and unlock shear
+            unlock_shear(card_id)
             
             log_entry = {
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'message': f"Access granted for card: {card_id}"
+                'message': f"Access granted for card: {card_id} - Shear unlocked"
             }
         else:
             # Deny access
@@ -141,28 +143,100 @@ def handle_card_read(card_data):
         # Keep only last 100 log entries
         if len(session_logs) > 100:
             session_logs = session_logs[-100:]
-            logger.info(f"Access GRANTED for card {card_id}: {validation_result['reason']}")
-        else:
-            # Deny access
-            if labjack_u3 and labjack_u3.is_connected():
-                labjack_u3.set_status_led('red', True)  # Red LED on
-                # Turn off red LED after 1 second
-                threading.Timer(1.0, lambda: labjack_u3.set_status_led('red', False)).start()
-            logger.warning(f"Access DENIED for card {card_id}: {validation_result['reason']}")
         
     except Exception as e:
         logger.error(f"Error handling card read: {e}")
 
+def unlock_shear(card_id):
+    """Unlock shear and start monitoring"""
+    global shear_unlock_timer, shear_unlocked
+    
+    try:
+        # Cancel any existing timer
+        if shear_unlock_timer:
+            shear_unlock_timer.cancel()
+        
+        # Set shear output HIGH to unlock
+        if labjack_u3 and labjack_u3.is_connected():
+            labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], True)
+            labjack_u3.set_status_led('green', True)  # Green LED on
+        
+        shear_unlocked = True
+        logger.info(f"Shear unlocked for card: {card_id}")
+        
+        # Start timeout timer
+        start_shear_timeout_timer()
+        
+    except Exception as e:
+        logger.error(f"Error unlocking shear: {e}")
+
+def lock_shear():
+    """Lock shear and stop monitoring"""
+    global shear_unlock_timer, shear_unlocked
+    
+    try:
+        # Cancel timer
+        if shear_unlock_timer:
+            shear_unlock_timer.cancel()
+            shear_unlock_timer = None
+        
+        # Set shear output LOW to lock
+        if labjack_u3 and labjack_u3.is_connected():
+            labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], False)
+            labjack_u3.set_status_led('green', False)  # Turn off green LED
+        
+        shear_unlocked = False
+        logger.info("Shear locked due to timeout")
+        
+        # Add to session logs
+        log_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': "Shear locked - timeout reached"
+        }
+        session_logs.append(log_entry)
+        
+    except Exception as e:
+        logger.error(f"Error locking shear: {e}")
+
+def start_shear_timeout_timer():
+    """Start or restart the shear timeout timer"""
+    global shear_unlock_timer
+    
+    # Cancel existing timer
+    if shear_unlock_timer:
+        shear_unlock_timer.cancel()
+    
+    # Start new timer
+    timeout_seconds = SHEAR_SETTINGS['unlock_timeout']
+    shear_unlock_timer = threading.Timer(timeout_seconds, lock_shear)
+    shear_unlock_timer.start()
+    logger.info(f"Shear timeout timer started: {timeout_seconds} seconds")
+
 def handle_labjack_input_change(change_data):
     """Handle LabJack input changes"""
+    global shear_unlocked
     try:
         logger.info(f"LabJack input change: {change_data}")
         
+        # Check for motion detection while shear is unlocked
+        if (change_data['channel'] == SHEAR_SETTINGS['motion_input_pin'] and 
+            shear_unlocked and change_data.get('state')):
+            # Motion detected while shear is unlocked - reset timer
+            logger.info("Motion detected - resetting shear timeout timer")
+            start_shear_timeout_timer()
+            
+            # Add to session logs
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'message': "Motion detected - shear timeout reset"
+            }
+            session_logs.append(log_entry)
+        
         # Add context for specific sensors
-        if change_data['channel'] == 'FIO4':  # Shear sensor (U3 uses FIO4 for inputs)
-            logger.info(f"Shear sensor change: {'locked' if change_data.get('state') else 'unlocked'}")
-        elif change_data['channel'] == 'FIO5':  # Motion sensor
+        if change_data['channel'] == 'FIO4':  # Motion sensor
             logger.info(f"Motion sensor change: {'detected' if change_data.get('state') else 'clear'}")
+        elif change_data['channel'] == 'FIO5':  # Additional input
+            logger.info(f"FIO5 input change: {'HIGH' if change_data.get('state') else 'LOW'}")
         elif change_data['channel'] == 'AIN0':  # Temperature sensor
             logger.info(f"Temperature sensor change: {change_data.get('value')}°C")
         
@@ -229,8 +303,21 @@ def admin():
 def logout():
     """Logout and clear session"""
     global last_card_read
+    
+    # Lock shear when user logs out for security
+    lock_shear()
+    
+    # Clear session
     session.clear()
     last_card_read = None  # Clear the last card read to prevent auto re-login
+    
+    # Add logout log
+    log_entry = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'message': 'User logged out - Shear locked for security'
+    }
+    session_logs.append(log_entry)
+    
     return redirect(url_for('index'))
 
 @app.route('/api/card-access/<card_id>')
@@ -256,6 +343,7 @@ def api_card_access(card_id):
                     session['user_role'] = access_level
                     session['user_name'] = card_info.get('name')
                     session['card_id'] = card_id
+                    session['login_method'] = 'card'  # Track how they logged in
                 
                 return jsonify({
                     'success': True,
@@ -341,12 +429,45 @@ def api_admin_login():
         
         if password == AUTH_CREDENTIALS['admin']:
             session['user_role'] = 'admin'
+            session['login_method'] = 'password'  # Track how they logged in
             return jsonify({'success': True, 'message': 'Admin login successful'})
         else:
             return jsonify({'success': False, 'message': 'Invalid password'})
     
     except Exception as e:
         logger.error(f"Error during admin login: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/user-permissions')
+def api_user_permissions():
+    """Get current user's permissions"""
+    try:
+        user_role = session.get('user_role')
+        login_method = session.get('login_method', 'card')
+        
+        # Emergency admin (password login) can assign any role
+        # Card-based manager can only assign user role
+        # Card-based admin can assign any role
+        
+        permissions = {
+            'can_assign_admin': False,
+            'can_assign_manager': False,
+            'can_assign_user': False,
+            'user_role': user_role,
+            'login_method': login_method
+        }
+        
+        if user_role == 'admin':
+            permissions['can_assign_admin'] = True
+            permissions['can_assign_manager'] = True
+            permissions['can_assign_user'] = True
+        elif user_role == 'manager':
+            permissions['can_assign_user'] = True
+        
+        return jsonify({'success': True, 'permissions': permissions})
+        
+    except Exception as e:
+        logger.error(f"Error getting user permissions: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/last-card-read')
@@ -358,6 +479,174 @@ def api_last_card_read():
         'card_id': last_card_read,
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/api/request-access', methods=['POST'])
+def api_request_access():
+    """Submit an access request for a card"""
+    try:
+        data = request.json
+        card_id = data.get('card_id')
+        name = data.get('name', '').strip()
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
+        email = data.get('email', '').strip()
+        
+        if not card_id or not name:
+            return jsonify({'success': False, 'message': 'Card ID and name are required'}), 400
+        
+        # Load existing access requests
+        requests_file = 'access_requests.json'
+        try:
+            with open(requests_file, 'r') as f:
+                access_requests = json.load(f)
+        except FileNotFoundError:
+            access_requests = []
+        
+        # Check if request already exists for this card
+        existing_request = next((req for req in access_requests if req['card_id'] == card_id), None)
+        if existing_request:
+            return jsonify({'success': False, 'message': 'Access request already exists for this card'}), 400
+        
+        # Add new request
+        new_request = {
+            'card_id': card_id,
+            'name': name,
+            'first_name': first_name,
+            'last_name': last_name,
+            'email': email,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'pending'
+        }
+        
+        access_requests.append(new_request)
+        
+        # Save requests
+        with open(requests_file, 'w') as f:
+            json.dump(access_requests, f, indent=2)
+        
+        logger.info(f"Access request submitted for card {card_id} by {name}")
+        
+        return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error processing access request: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/access-requests')
+def api_get_access_requests():
+    """Get all pending access requests"""
+    try:
+        requests_file = 'access_requests.json'
+        try:
+            with open(requests_file, 'r') as f:
+                access_requests = json.load(f)
+        except FileNotFoundError:
+            access_requests = []
+        
+        # Filter only pending requests
+        pending_requests = [req for req in access_requests if req.get('status') == 'pending']
+        
+        return jsonify({'success': True, 'requests': pending_requests})
+        
+    except Exception as e:
+        logger.error(f"Error getting access requests: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/access-requests/<card_id>', methods=['POST'])
+def api_approve_access_request(card_id):
+    """Approve an access request and create user"""
+    try:
+        data = request.json
+        access_level = data.get('access_level', 'user')
+        
+        # Check if user has permission to assign this access level
+        user_role = session.get('user_role')  # Fixed: use 'user_role' key
+        
+        # Emergency admin login (via password) has full privileges
+        # Card-based manager can only assign user level
+        if user_role == 'manager' and access_level not in ['user']:
+            return jsonify({'success': False, 'message': 'Managers can only assign user access level'}), 403
+        
+        if user_role not in ['admin', 'manager']:
+            return jsonify({'success': False, 'message': 'Insufficient permissions'}), 403
+        
+        # Load access requests
+        requests_file = 'access_requests.json'
+        try:
+            with open(requests_file, 'r') as f:
+                access_requests = json.load(f)
+        except FileNotFoundError:
+            return jsonify({'success': False, 'message': 'No access requests found'}), 404
+        
+        # Find the request
+        request_index = next((i for i, req in enumerate(access_requests) if req['card_id'] == card_id), None)
+        if request_index is None:
+            return jsonify({'success': False, 'message': 'Access request not found'}), 404
+        
+        access_request = access_requests[request_index]
+        
+        # Create the user using card_manager
+        success = card_manager.add_card(
+            card_id=card_id,
+            name=access_request['name'],
+            department="",  # Default empty department
+            access_level=access_level,
+            notes=f"Added via access request on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        if success:
+            # Update the card to have 24/7 access (no time restrictions)
+            card_manager.access_list[card_id]['access_times'] = None
+            card_manager.save_access_list()
+        
+        if success:
+            # Mark request as approved and remove it
+            access_requests.pop(request_index)
+            
+            # Save updated requests
+            with open(requests_file, 'w') as f:
+                json.dump(access_requests, f, indent=2)
+            
+            logger.info(f"Access request approved for card {card_id} - {access_request['name']} as {access_level}")
+            
+            return jsonify({'success': True, 'message': f"User {access_request['name']} added with {access_level} access"})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add user'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error approving access request: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/access-requests/<card_id>', methods=['DELETE'])
+def api_deny_access_request(card_id):
+    """Deny an access request"""
+    try:
+        # Load access requests
+        requests_file = 'access_requests.json'
+        try:
+            with open(requests_file, 'r') as f:
+                access_requests = json.load(f)
+        except FileNotFoundError:
+            return jsonify({'success': False, 'message': 'No access requests found'}), 404
+        
+        # Find and remove the request
+        request_index = next((i for i, req in enumerate(access_requests) if req['card_id'] == card_id), None)
+        if request_index is None:
+            return jsonify({'success': False, 'message': 'Access request not found'}), 404
+        
+        removed_request = access_requests.pop(request_index)
+        
+        # Save updated requests
+        with open(requests_file, 'w') as f:
+            json.dump(access_requests, f, indent=2)
+        
+        logger.info(f"Access request denied for card {card_id} - {removed_request['name']}")
+        
+        return jsonify({'success': True, 'message': 'Access request denied'})
+        
+    except Exception as e:
+        logger.error(f"Error denying access request: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/users')
 def api_users():
@@ -551,13 +840,61 @@ def api_download_usage_report():
         download_name=f'usage_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
     )
 
+@app.route('/api/settings', methods=['GET'])
+def api_get_settings():
+    """Get current system settings"""
+    try:
+        return jsonify({
+            'success': True,
+            'settings': SHEAR_SETTINGS
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/settings', methods=['POST'])
 def api_save_settings():
     """Save system settings (admin only)"""
+    global SHEAR_SETTINGS
     try:
         data = request.get_json()
-        # In a real implementation, save settings to a config file or database
-        return jsonify({'success': True, 'message': 'Settings saved successfully'})
+        
+        # Update timeout setting if provided
+        if 'unlock_timeout' in data:
+            timeout_value = int(data['unlock_timeout'])
+            if 10 <= timeout_value <= 3600:  # Allow 10 seconds to 1 hour
+                SHEAR_SETTINGS['unlock_timeout'] = timeout_value
+                logger.info(f"Shear unlock timeout updated to {timeout_value} seconds")
+            else:
+                return jsonify({'success': False, 'message': 'Timeout must be between 10 and 3600 seconds'}), 400
+        
+        # Update shear output pin if provided
+        if 'shear_output_pin' in data:
+            pin = data['shear_output_pin']
+            if pin in ['FIO6', 'FIO7']:  # Valid output pins
+                SHEAR_SETTINGS['shear_output_pin'] = pin
+                logger.info(f"Shear output pin updated to {pin}")
+            else:
+                return jsonify({'success': False, 'message': 'Invalid output pin'}), 400
+        
+        # Update motion input pin if provided
+        if 'motion_input_pin' in data:
+            pin = data['motion_input_pin']
+            if pin in ['FIO4', 'FIO5']:  # Valid input pins
+                SHEAR_SETTINGS['motion_input_pin'] = pin
+                logger.info(f"Motion input pin updated to {pin}")
+            else:
+                return jsonify({'success': False, 'message': 'Invalid input pin'}), 400
+        
+        # Update error action if provided
+        if 'error_action' in data:
+            action = data['error_action']
+            if action in ['unlock', 'lock', 'maintain']:
+                SHEAR_SETTINGS['error_action'] = action
+                logger.info(f"Error action updated to {action}")
+            else:
+                return jsonify({'success': False, 'message': 'Invalid error action'}), 400
+        
+        return jsonify({'success': True, 'message': 'Settings saved successfully', 'settings': SHEAR_SETTINGS})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -574,11 +911,67 @@ def api_restart_hardware():
 @app.route('/api/emergency-stop', methods=['POST'])
 def api_emergency_stop():
     """Emergency stop (admin only)"""
+    global shear_unlocked, shear_unlock_timer
     try:
-        if labjack_u3 and labjack_u3.is_connected():
-            labjack_u3.force_shear_lock()
-            labjack_u3.set_status_led('red', True)
+        # Lock shear immediately
+        lock_shear()
+        
+        # Clear all sessions
+        session.clear()
+        
+        # Add emergency log
+        log_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': 'EMERGENCY STOP - All systems locked'
+        }
+        session_logs.append(log_entry)
+        
+        logger.warning("Emergency stop activated")
         return jsonify({'success': True, 'message': 'Emergency stop activated'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/shear/lock', methods=['POST'])
+def api_lock_shear():
+    """Manually lock shear (admin only)"""
+    try:
+        lock_shear()
+        return jsonify({'success': True, 'message': 'Shear locked successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/emergency-unlock', methods=['POST'])
+def api_emergency_unlock():
+    """Emergency unlock due to system error"""
+    global shear_unlocked
+    try:
+        data = request.get_json() or {}
+        reason = data.get('reason', 'System error')
+        
+        # Check error action setting
+        error_action = SHEAR_SETTINGS.get('error_action', 'unlock')
+        
+        if error_action == 'unlock':
+            # Unlock shear for safety
+            if labjack_u3 and labjack_u3.is_connected():
+                labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], True)
+                shear_unlocked = True
+                
+            # Add emergency log
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'message': f'EMERGENCY UNLOCK: {reason}'
+            }
+            session_logs.append(log_entry)
+            
+            logger.warning(f"Emergency unlock activated due to: {reason}")
+            return jsonify({'success': True, 'message': f'Emergency unlock activated: {reason}'})
+        elif error_action == 'lock':
+            lock_shear()
+            return jsonify({'success': True, 'message': f'Emergency lock activated: {reason}'})
+        else:  # maintain
+            return jsonify({'success': True, 'message': f'Maintaining current state: {reason}'})
+            
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -618,17 +1011,34 @@ def api_factory_reset():
 @app.route('/api/status')
 def api_status():
     """API endpoint to check system status"""
+    global shear_unlocked, shear_unlock_timer
+    
+    # Calculate remaining time if timer is active
+    remaining_time = 0
+    if shear_unlock_timer and shear_unlocked:
+        # This is an approximation since threading.Timer doesn't expose remaining time
+        remaining_time = SHEAR_SETTINGS['unlock_timeout']  # We'll update this with JavaScript
+    
     status = {
         'timestamp': datetime.now().isoformat(),
         'card_reader': {
             'connected': card_reader.is_connected() if card_reader else False,
-            'device_info': card_reader.get_device_info() if card_reader and card_reader.is_connected() else None
+            'device_info': card_reader.get_device_info() if card_reader and card_reader.is_connected() else None,
+            'last_card': last_card_read
         },
         'labjack_u3': {
             'connected': labjack_u3.is_connected() if labjack_u3 else False,
             'device_info': labjack_u3.get_device_info() if labjack_u3 and labjack_u3.is_connected() else None,
             'all_states': labjack_u3.get_all_states() if labjack_u3 and labjack_u3.is_connected() else None
-        }
+        },
+        'shear': {
+            'unlocked': shear_unlocked,
+            'timeout_remaining': remaining_time,
+            'timeout_setting': SHEAR_SETTINGS['unlock_timeout'],
+            'output_pin': SHEAR_SETTINGS['shear_output_pin'],
+            'motion_pin': SHEAR_SETTINGS['motion_input_pin']
+        },
+        'recent_logs': session_logs[-5:] if session_logs else []
     }
     return jsonify(status)
 

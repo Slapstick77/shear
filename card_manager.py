@@ -219,15 +219,7 @@ class CardManager:
                 "active": True,
                 "created_date": datetime.now().isoformat(),
                 "last_access": None,
-                "access_times": {
-                    "monday": {"start": "08:00", "end": "18:00"},
-                    "tuesday": {"start": "08:00", "end": "18:00"},
-                    "wednesday": {"start": "08:00", "end": "18:00"},
-                    "thursday": {"start": "08:00", "end": "18:00"},
-                    "friday": {"start": "08:00", "end": "18:00"},
-                    "saturday": None,
-                    "sunday": None
-                },
+                "access_times": None,  # No time restrictions - 24/7 access
                 "notes": notes
             }
             

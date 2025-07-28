@@ -16,11 +16,14 @@ class CardReader:
     
     def __init__(self, on_card_read: Optional[Callable] = None, vendor_id: Optional[int] = None, product_id: Optional[int] = None):
         self.on_card_read = on_card_read
-        self.vendor_id = vendor_id
-        self.product_id = product_id
+        self.vendor_id = vendor_id or 0x0c27  # Default to RFIDeas RDR-6081AKU
+        self.product_id = product_id or 0x3bfa
         self.device = None
         self.running = False
         self.monitor_thread = None
+        self.card_buffer = []
+        self.last_read_time = 0
+        self.card_timeout = 0.5  # 500ms timeout between complete card reads
         
     def find_card_reader(self) -> Optional[Dict[str, Any]]:
         """Find connected card reader device"""
@@ -139,6 +142,18 @@ class CardReader:
             data = self.device.read(64)
             
             if data:
+                logger.debug(f"Raw card data received: {data} (type: {type(data)})")
+                # Print raw card data to console for debugging
+                print(f"[CARD READER] Raw data: {data}")
+                print(f"[CARD READER] Data type: {type(data)}")
+                if isinstance(data, list):
+                    print(f"[CARD READER] Hex data: {' '.join([f'{b:02x}' for b in data])}")
+                else:
+                    print(f"[CARD READER] Hex data: {data.hex()}")
+                
+                # Convert list to bytes if needed (hid.device.read() returns a list)
+                if isinstance(data, list):
+                    data = bytes(data)
                 # Parse the raw data based on your card reader's protocol
                 card_data = self.parse_card_data(data)
                 return card_data
@@ -149,69 +164,49 @@ class CardReader:
             logger.error(f"Error reading card data: {e}")
             return None
     
-    def parse_card_data(self, raw_data: bytes) -> Dict[str, Any]:
+    def parse_card_data(self, raw_data) -> Dict[str, Any]:
         """Parse raw card data into structured format for RDR-6081AKU"""
         try:
-            # RDR-6081AKU typically sends proximity card data in specific formats
-            # Common formats:
-            # - 26-bit Wiegand format
-            # - Raw facility code + card number
-            # - ASCII encoded numbers
+            # Convert list to bytes if needed
+            if isinstance(raw_data, list):
+                raw_data = bytes(raw_data)
             
-            # Convert to hex string
-            hex_data = raw_data.hex().upper()
+            current_time = time.time()
             
-            # Remove null bytes and clean up
-            clean_data = bytes([b for b in raw_data if b != 0])
+            # Add non-zero bytes to buffer
+            new_bytes = [b for b in raw_data if b != 0]
+            if new_bytes:
+                # If it's been too long since last read, start new card
+                if current_time - self.last_read_time > self.card_timeout and self.card_buffer:
+                    # Process previous card first
+                    previous_card = self.process_card_buffer()
+                    if previous_card:
+                        # Clear buffer for new card
+                        self.card_buffer = new_bytes
+                        self.last_read_time = current_time
+                        return previous_card
+                    
+                # Add to current buffer
+                self.card_buffer.extend(new_bytes)
+                self.last_read_time = current_time
+                
+                # Check if we have enough data for a complete card (minimum 4 bytes)
+                if len(self.card_buffer) >= 4:
+                    # Try to process the current buffer
+                    card_result = self.process_card_buffer()
+                    if card_result:
+                        # Reset buffer for next card
+                        self.card_buffer = []
+                        return card_result
             
-            # Try to extract card ID using different methods
-            card_id = None
-            
-            # Method 1: Look for ASCII digits (common with RDR-6081AKU)
-            ascii_data = ''.join([chr(b) for b in clean_data if 32 <= b <= 126])
-            if ascii_data.isdigit() and len(ascii_data) >= 3:
-                card_id = ascii_data
-                logger.info(f"Extracted ASCII card ID: {card_id}")
-            
-            # Method 2: Parse Wiegand 26-bit format (if applicable)
-            elif len(clean_data) >= 3:
-                # Try to parse as 26-bit Wiegand
-                if len(clean_data) == 3:
-                    # 3-byte format: facility code (1 byte) + card number (2 bytes)
-                    facility_code = clean_data[0]
-                    card_number = (clean_data[1] << 8) | clean_data[2]
-                    card_id = f"{facility_code:03d}{card_number:05d}"
-                    logger.info(f"Extracted Wiegand card ID: {card_id} (Facility: {facility_code}, Card: {card_number})")
-                elif len(clean_data) == 4:
-                    # 4-byte format
-                    card_number = int.from_bytes(clean_data, byteorder='big')
-                    card_id = str(card_number)
-                    logger.info(f"Extracted 4-byte card ID: {card_id}")
-            
-            # Method 3: Use hex representation as fallback
-            if not card_id and len(hex_data) > 4:
-                # Remove leading zeros and use hex
-                card_id = hex_data.lstrip('0') or '0'
-                logger.info(f"Using hex card ID: {card_id}")
-            
-            # Method 4: Last resort - use full hex
-            if not card_id:
-                card_id = hex_data
-                logger.warning(f"Using raw hex as card ID: {card_id}")
-            
-            return {
-                'card_id': card_id,
-                'raw_data': hex_data,
-                'ascii_data': ascii_data,
-                'facility_code': getattr(self, '_last_facility_code', None),
-                'card_number': getattr(self, '_last_card_number', None),
-                'timestamp': time.time(),
-                'reader_id': 'RDR-6081AKU',
-                'card_type': 'proximity'
-            }
+            return None  # No complete card yet
             
         except Exception as e:
             logger.error(f"Error parsing card data: {e}")
+            # Handle the case where raw_data might be a list
+            if isinstance(raw_data, list):
+                raw_data = bytes(raw_data)
+            
             return {
                 'card_id': raw_data.hex().upper(),
                 'raw_data': raw_data.hex().upper(),
@@ -220,6 +215,52 @@ class CardReader:
                 'card_type': 'proximity',
                 'parse_error': str(e)
             }
+    
+    def process_card_buffer(self) -> Optional[Dict[str, Any]]:
+        """Process the collected card buffer into a card data dictionary"""
+        if not self.card_buffer:
+            return None
+        
+        try:
+            # Create hex string from buffer
+            hex_data = ''.join([f"{b:02x}" for b in self.card_buffer]).upper()
+            
+            # Method 1: Use hex as card ID (most reliable for RDR-6081AKU)
+            card_id = hex_data
+            
+            # Method 2: Check if it contains readable ASCII
+            ascii_data = ''.join([chr(b) for b in self.card_buffer if 32 <= b <= 126])
+            
+            # Method 3: Extract any numeric patterns
+            numeric_data = ''.join([chr(b) for b in self.card_buffer if 48 <= b <= 57])
+            
+            logger.info(f"Card processed - ID: {card_id}, ASCII: '{ascii_data}', Numeric: '{numeric_data}'")
+            
+            # Print card processing info to console
+            print(f"[CARD READER] ========== CARD PROCESSED ==========")
+            print(f"[CARD READER] Card ID: {card_id}")
+            print(f"[CARD READER] Raw hex: {hex_data}")
+            print(f"[CARD READER] ASCII data: '{ascii_data}'")
+            print(f"[CARD READER] Numeric data: '{numeric_data}'")
+            print(f"[CARD READER] Buffer length: {len(self.card_buffer)} bytes")
+            print(f"[CARD READER] =====================================")
+            
+            return {
+                'card_id': card_id,
+                'raw_data': hex_data,
+                'ascii_data': ascii_data,
+                'numeric_data': numeric_data,
+                'facility_code': None,  # RDR-6081AKU doesn't typically separate facility code
+                'card_number': None,
+                'timestamp': time.time(),
+                'reader_id': 'RDR-6081AKU',
+                'card_type': 'proximity',
+                'buffer_length': len(self.card_buffer)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing card buffer: {e}")
+            return None
     
     def monitor_loop(self):
         """Main monitoring loop"""

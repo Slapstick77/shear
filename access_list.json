@@ -38,5 +38,15 @@
     "last_access": "2025-07-24T23:46:55.803664",
     "access_times": null,
     "notes": "Test user card - basic access"
+  },
+  "20232026": {
+    "name": "Svend Hansen",
+    "department": "",
+    "access_level": "user",
+    "active": true,
+    "created_date": "2025-07-25T21:14:49.025378",
+    "last_access": "2025-07-28T23:34:24.121601",
+    "access_times": null,
+    "notes": "Added via access request on 2025-07-25 21:14:49"
   }
 }

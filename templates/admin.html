@@ -124,6 +124,29 @@
             padding: 10px;
             border-bottom: 1px solid #eee;
         }
+        .request-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .request-info {
+            flex-grow: 1;
+        }
+        .request-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .request-actions select {
+            margin-right: 5px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
         .logs-container {
             background: #f8f9fa;
             border: 1px solid #ddd;
@@ -164,6 +187,7 @@
         
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
+            <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="#" class="nav-btn" onclick="showSection('settings')">Settings</a>
@@ -214,6 +238,19 @@
                 </div>
             </div>
             
+            <!-- Access Requests Section -->
+            <div id="requests" class="section">
+                <div class="card">
+                    <h3>Pending Access Requests</h3>
+                    <div style="margin-bottom: 10px;">
+                        <button class="btn" onclick="loadAccessRequests()">Refresh Requests</button>
+                    </div>
+                    <div id="requests-list">
+                        <div>Loading requests...</div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Logs Section -->
             <div id="logs" class="section">
                 <div class="card">
@@ -247,11 +284,38 @@
             <div id="settings" class="section">
                 <div class="settings-grid">
                     <div class="card">
-                        <h3>System Settings</h3>
+                        <h3>Shear Control Settings</h3>
                         <div class="setting-item">
-                            <div>Auto-lock timeout:</div>
-                            <input type="number" id="auto-lock-timeout" value="30" min="1" max="300">
+                            <div>Shear unlock timeout (seconds):</div>
+                            <input type="number" id="shear-timeout" value="120" min="10" max="3600">
                         </div>
+                        <div class="setting-item">
+                            <div>Shear output pin:</div>
+                            <select id="shear-output-pin">
+                                <option value="FIO6">FIO6</option>
+                                <option value="FIO7">FIO7</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <div>Motion input pin:</div>
+                            <select id="motion-input-pin">
+                                <option value="FIO4">FIO4</option>
+                                <option value="FIO5">FIO5</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <div>Error handling action:</div>
+                            <select id="error-action">
+                                <option value="unlock">Unlock shear (safety)</option>
+                                <option value="lock">Lock shear (security)</option>
+                                <option value="maintain">Maintain current state</option>
+                            </select>
+                        </div>
+                        <button class="btn success" onclick="saveSettings()">Save Settings</button>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>System Settings</h3>
                         <div class="setting-item">
                             <div>Card read timeout:</div>
                             <input type="number" id="card-timeout" value="5" min="1" max="60">
@@ -260,7 +324,6 @@
                             <div>Enable logging:</div>
                             <input type="checkbox" id="enable-logging" checked>
                         </div>
-                        <button class="btn success" onclick="saveSettings()">Save Settings</button>
                     </div>
                     
                     <div class="card">
@@ -274,6 +337,7 @@
                             <span id="reader-status">Checking...</span>
                         </div>
                         <button class="btn warning" onclick="restartHardware()">Restart Hardware</button>
+                        <button class="btn warning" onclick="lockShear()">Lock Shear</button>
                         <button class="btn danger" onclick="emergencyStop()">Emergency Stop</button>
                     </div>
                     
@@ -322,6 +386,8 @@
             
             if (sectionName === 'users') {
                 loadUsers();
+            } else if (sectionName === 'requests') {
+                loadAccessRequests();
             } else if (sectionName === 'logs') {
                 loadLogs();
             } else if (sectionName === 'usage') {
@@ -413,7 +479,7 @@
         }
         
         function loadSettings() {
-            // Load hardware status
+            // Load hardware status and settings
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
@@ -421,9 +487,32 @@
                         data.labjack_u3.connected ? 'Connected' : 'Disconnected';
                     document.getElementById('reader-status').textContent = 
                         data.card_reader.connected ? 'Connected' : 'Disconnected';
+                    
+                    // Load shear settings if available
+                    if (data.shear) {
+                        document.getElementById('shear-timeout').value = data.shear.timeout_setting || 120;
+                        document.getElementById('shear-output-pin').value = data.shear.output_pin || 'FIO6';
+                        document.getElementById('motion-input-pin').value = data.shear.motion_pin || 'FIO4';
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading hardware status:', error);
+                });
+            
+            // Load current settings from server
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const settings = data.settings;
+                        document.getElementById('shear-timeout').value = settings.unlock_timeout || 120;
+                        document.getElementById('shear-output-pin').value = settings.shear_output_pin || 'FIO6';
+                        document.getElementById('motion-input-pin').value = settings.motion_input_pin || 'FIO4';
+                        document.getElementById('error-action').value = settings.error_action || 'unlock';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading settings:', error);
                 });
         }
         
@@ -536,7 +625,10 @@
         
         function saveSettings() {
             const settings = {
-                auto_lock_timeout: document.getElementById('auto-lock-timeout').value,
+                unlock_timeout: parseInt(document.getElementById('shear-timeout').value),
+                shear_output_pin: document.getElementById('shear-output-pin').value,
+                motion_input_pin: document.getElementById('motion-input-pin').value,
+                error_action: document.getElementById('error-action').value,
                 card_timeout: document.getElementById('card-timeout').value,
                 enable_logging: document.getElementById('enable-logging').checked
             };
@@ -588,6 +680,25 @@
                 })
                 .catch(error => {
                     alert('Error triggering emergency stop: ' + error.message);
+                });
+            }
+        }
+        
+        function lockShear() {
+            if (confirm('Lock the shear now?')) {
+                fetch('/api/shear/lock', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    // Refresh status to show updated shear state
+                    if (data.success) {
+                        loadSettings();
+                    }
+                })
+                .catch(error => {
+                    alert('Error locking shear: ' + error.message);
                 });
             }
         }
@@ -659,6 +770,113 @@
                         alert('Error performing factory reset: ' + error.message);
                     });
                 }
+            }
+        }
+        
+        // Access Request Functions
+        function loadAccessRequests() {
+            // First get user permissions
+            fetch('/api/user-permissions')
+                .then(response => response.json())
+                .then(permData => {
+                    const permissions = permData.permissions || {};
+                    
+                    // Then load access requests
+                    fetch('/api/access-requests')
+                        .then(response => response.json())
+                        .then(data => {
+                            const requestsList = document.getElementById('requests-list');
+                            if (data.success && data.requests.length > 0) {
+                                requestsList.innerHTML = data.requests.map(request => {
+                                    // Build access level options based on permissions
+                                    let accessLevelOptions = '';
+                                    if (permissions.can_assign_user) {
+                                        accessLevelOptions += '<option value="user">User</option>';
+                                    }
+                                    if (permissions.can_assign_manager) {
+                                        accessLevelOptions += '<option value="manager">Manager</option>';
+                                    }
+                                    if (permissions.can_assign_admin) {
+                                        accessLevelOptions += '<option value="admin">Admin</option>';
+                                    }
+                                    
+                                    return `
+                                        <div class="request-item">
+                                            <div class="request-info">
+                                                <strong>${request.name}</strong><br>
+                                                Card ID: ${request.card_id}<br>
+                                                Email: ${request.email || 'Not provided'}<br>
+                                                <small>Requested: ${new Date(request.timestamp).toLocaleString()}</small>
+                                            </div>
+                                            <div class="request-actions">
+                                                <select id="access-level-${request.card_id}">
+                                                    ${accessLevelOptions}
+                                                </select>
+                                                <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
+                                                <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('');
+                            } else {
+                                requestsList.innerHTML = '<div class="request-item"><div>No pending access requests</div></div>';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading access requests:', error);
+                            document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading requests</div></div>';
+                        });
+                })
+                .catch(error => {
+                    console.error('Error loading permissions:', error);
+                    document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading permissions</div></div>';
+                });
+        }
+        
+        function approveRequest(cardId) {
+            const accessLevel = document.getElementById(`access-level-${cardId}`).value;
+            
+            fetch(`/api/access-requests/${cardId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ access_level: accessLevel })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    loadAccessRequests();
+                    loadUsers(); // Refresh users list too
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error approving request:', error);
+                alert('Error approving request');
+            });
+        }
+        
+        function denyRequest(cardId) {
+            if (confirm('Are you sure you want to deny this access request?')) {
+                fetch(`/api/access-requests/${cardId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        loadAccessRequests();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error denying request:', error);
+                    alert('Error denying request');
+                });
             }
         }
         

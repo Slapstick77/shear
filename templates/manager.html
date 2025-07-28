@@ -120,6 +120,23 @@
             padding: 10px;
             border-bottom: 1px solid #eee;
         }
+        .request-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .request-info {
+            flex-grow: 1;
+        }
+        .request-actions {
+            display: flex;
+            gap: 10px;
+        }
         .logs-container {
             background: #f8f9fa;
             border: 1px solid #ddd;
@@ -148,6 +165,7 @@
         
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
+            <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="/" class="nav-btn">← Back to Operating</a>
@@ -185,6 +203,19 @@
                         <div class="user-item">
                             <div>Loading users...</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Access Requests Section -->
+            <div id="requests" class="section">
+                <div class="card">
+                    <h3>Pending Access Requests</h3>
+                    <div style="margin-bottom: 10px;">
+                        <button class="btn" onclick="loadAccessRequests()">Refresh Requests</button>
+                    </div>
+                    <div id="requests-list">
+                        <div>Loading requests...</div>
                     </div>
                 </div>
             </div>
@@ -241,6 +272,8 @@
             // Load data for the section
             if (sectionName === 'users') {
                 loadUsers();
+            } else if (sectionName === 'requests') {
+                loadAccessRequests();
             } else if (sectionName === 'logs') {
                 loadLogs();
             } else if (sectionName === 'usage') {
@@ -394,6 +427,84 @@
         
         function downloadUsageReport() {
             window.open('/api/usage-report/download', '_blank');
+        }
+        
+        // Access Request Functions (Manager can only approve as 'user')
+        function loadAccessRequests() {
+            fetch('/api/access-requests')
+                .then(response => response.json())
+                .then(data => {
+                    const requestsList = document.getElementById('requests-list');
+                    if (data.success && data.requests.length > 0) {
+                        requestsList.innerHTML = data.requests.map(request => `
+                            <div class="request-item">
+                                <div class="request-info">
+                                    <strong>${request.name}</strong><br>
+                                    Card ID: ${request.card_id}<br>
+                                    Email: ${request.email || 'Not provided'}<br>
+                                    <small>Requested: ${new Date(request.timestamp).toLocaleString()}</small><br>
+                                    <em>Note: Managers can only approve as 'User' access level</em>
+                                </div>
+                                <div class="request-actions">
+                                    <button class="btn" onclick="approveRequest('${request.card_id}')">Approve as User</button>
+                                    <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        requestsList.innerHTML = '<div class="request-item"><div>No pending access requests</div></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading access requests:', error);
+                    document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading requests</div></div>';
+                });
+        }
+        
+        function approveRequest(cardId) {
+            // Managers can only approve as 'user' level
+            fetch(`/api/access-requests/${cardId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ access_level: 'user' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    loadAccessRequests();
+                    loadUsers(); // Refresh users list too
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error approving request:', error);
+                alert('Error approving request');
+            });
+        }
+        
+        function denyRequest(cardId) {
+            if (confirm('Are you sure you want to deny this access request?')) {
+                fetch(`/api/access-requests/${cardId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        loadAccessRequests();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error denying request:', error);
+                    alert('Error denying request');
+                });
+            }
         }
         
         // Load initial data
