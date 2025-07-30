@@ -1,51 +1,11 @@
 {
-  "001": {
-    "name": "Test Admin",
-    "department": "Administration",
-    "access_level": "admin",
-    "active": true,
-    "created_date": "2025-07-24T23:33:17.104425",
-    "last_access": "2025-07-24T23:46:43.346325",
-    "access_times": null,
-    "notes": "Test admin card - full access"
-  },
-  "002": {
-    "name": "Test Manager",
-    "department": "Management",
-    "access_level": "manager",
-    "active": true,
-    "created_date": "2025-07-24T23:33:17.104450",
-    "last_access": "2025-07-24T23:46:38.165450",
-    "access_times": null,
-    "notes": "Test manager card"
-  },
-  "003": {
-    "name": "Test User",
-    "department": "Operations",
-    "access_level": "user",
-    "active": true,
-    "created_date": "2025-07-24T23:33:17.104456",
-    "last_access": "2025-07-24T23:38:37.391603",
-    "access_times": null,
-    "notes": "Test user card - basic access"
-  },
-  "004": {
-    "name": "Test User 2",
-    "department": "Operations",
-    "access_level": "user",
-    "active": true,
-    "created_date": "2025-07-24T23:33:17.104461",
-    "last_access": "2025-07-24T23:46:55.803664",
-    "access_times": null,
-    "notes": "Test user card - basic access"
-  },
   "20232026": {
     "name": "Svend Hansen",
     "department": "",
     "access_level": "user",
     "active": true,
     "created_date": "2025-07-25T21:14:49.025378",
-    "last_access": "2025-07-28T23:34:24.121601",
+    "last_access": "2025-07-30T16:23:31.079261",
     "access_times": null,
     "notes": "Added via access request on 2025-07-25 21:14:49"
   }

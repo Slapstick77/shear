@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shear Operating System</title>
+    <title>Shear Safety Lock</title>
     <style>
-        /* 7-inch touchscreen optimization */
+        /* Factory display optimization */
         * {
             box-sizing: border-box;
             -webkit-touch-callout: none;
@@ -17,320 +17,72 @@
         }
         
         body {
-            font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #0f1419 0%, #1a2332 30%, #2d3748 100%);
-            height: 100vh;
+            font-family: 'Arial Black', Arial, sans-serif;
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #2c2c2c;
+            height: 100vh !important;
+            width: 100vw !important;
             display: flex;
             flex-direction: column;
             color: white;
-            overflow: hidden; /* Prevent scrolling on touchscreen */
-            position: relative; /* Enable absolute positioning within body */
-            /* Force 7-inch display simulation on larger screens */
-            max-width: 1024px;
-            max-height: 600px;
-            margin: 0 auto;
+            overflow: hidden;
             position: relative;
         }
         
-        /* Simulate 7-inch bezel on larger screens */
-        @media (min-width: 1025px) or (min-height: 601px) {
-            body::before {
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: #000;
-                z-index: -1;
-            }
-            
-            body {
-                border: 20px solid #222;
-                border-radius: 15px;
-                box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            }
+        /* Fullscreen layout for all devices */
+        html, body {
+            width: 100vw !important;
+            height: 100vh !important;
         }
         
-        /* Header with status */
+        /* Header with title */
         .header {
+            background-color: #1a1a1a;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #444;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .shear-title {
-            font-size: clamp(1.5em, 5vw, 2.5em);
+        .title {
+            font-size: clamp(2em, 6vw, 4em);
             font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            text-align: center;
+            margin: 0;
+            color: #ffffff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             flex: 1;
         }
         
-        .shear-title.locked {
-            color: #ff4757;
-        }
-        
-        .shear-title.unlocked {
-            color: #2ed573;
-        }
-        
-        .container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            background: rgba(255, 255, 255, 0.05);
-            margin: 20px;
-            border-radius: 24px;
-            padding: 40px;
-            backdrop-filter: blur(20px);
-            box-shadow: 
-                0 8px 32px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-        }
-        
-        h1 {
-            font-size: clamp(2em, 6vw, 3em);
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            font-weight: bold;
-        }
-        
-        .scan-message {
-            font-size: clamp(1.2em, 4vw, 2em);
-            margin: 30px 0;
-            padding: 30px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            min-height: 120px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1.4;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(10px);
-            position: relative;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-        }
-        
-        .scan-message::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border-radius: 20px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
-            pointer-events: none;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            margin-right: 15px;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-indicator.ready {
-            background-color: #28a745;
-        }
-        
-        .status-indicator.waiting {
-            background-color: #ffc107;
-        }
-        
-        .status-indicator.error {
-            background-color: #dc3545;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        .button-container {
-            margin-top: 30px;
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 16px 32px;
-            border: none;
-            border-radius: 16px;
-            font-size: clamp(0.9em, 2.5vw, 1.2em);
-            font-weight: 600;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 120px;
-            min-height: 56px;
-            backdrop-filter: blur(10px);
-            position: relative;
-            overflow: hidden;
-            /* Touch-friendly sizing */
-            min-width: 44px;
-            min-height: 44px;
-            letter-spacing: 0.5px;
-        }
-        
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.6s;
-        }
-        
-        .btn:hover, .btn:active {
-            background: rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
-            box-shadow: 
-                0 8px 25px rgba(0, 0, 0, 0.3),
-                0 4px 12px rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-        
-        .btn:hover::before {
-            left: 100%;
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-            transition: transform 0.1s;
-        }
-        
-                        .system-status {
-            position: absolute;
-            bottom: 15px;
-            left: 15px;
-            display: flex;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: clamp(0.7em, 1.8vw, 0.9em);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            max-width: calc(100vw - 40px);
-            box-sizing: border-box;
-            font-weight: 500;
-        }
-        
-        .system-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-        
-        .system-indicator.ok {
-            background-color: #2ed573;
-        }
-        
-        .system-indicator.error {
-            background-color: #ff4757;
-        }
-        
-        .system-indicator.warning {
-            background-color: #ffa502;
-        }
-        
-        .btn.manager {
-            background: rgba(40, 167, 69, 0.3);
-            border-color: rgba(40, 167, 69, 0.5);
-        }
-        
-        .btn.admin {
-            background: rgba(220, 53, 69, 0.3);
-            border-color: rgba(220, 53, 69, 0.5);
-        }
-        
-        .last-activity {
-            margin-top: 20px;
-            font-size: clamp(0.9em, 2.5vw, 1.1em);
-            opacity: 0.8;
-            line-height: 1.4;
-        }
-        
-        /* Remove old status styles */
-        .card-status, .shear-status, .last-activity {
-            display: none;
-        }
-        
+        /* Admin access gear */
         .admin-access {
-            width: 45px;
-            height: 45px;
-            background: rgba(220, 53, 69, 0.3);
-            border: 2px solid rgba(220, 53, 69, 0.5);
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 24px;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
-            /* Touch-friendly sizing */
             min-width: 44px;
             min-height: 44px;
+            color: #cccccc;
         }
         
         .admin-access:hover, .admin-access:active {
-            background: rgba(220, 53, 69, 0.5);
-            transform: scale(1.15);
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: #ffffff;
         }
         
-        .admin-access.logged-in {
-            background: rgba(40, 167, 69, 0.3);
-            border-color: rgba(40, 167, 69, 0.5);
-        }
-        
-        .admin-access.logged-in:hover, .admin-access.logged-in:active {
-            background: rgba(40, 167, 69, 0.5);
-        }
-        
+        /* Admin panel styles */
         .admin-panel {
             position: fixed;
             top: 0;
@@ -345,11 +97,11 @@
         }
         
         .admin-panel-content {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(44, 44, 44, 0.95);
             border-radius: 20px;
             padding: 40px;
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 2px solid #666;
             text-align: center;
             color: white;
             max-width: 450px;
@@ -362,10 +114,10 @@
             margin: 15px 0;
             border: none;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
             color: white;
             font-size: clamp(1em, 3vw, 1.3em);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid #666;
         }
         
         .admin-panel input::placeholder {
@@ -377,128 +129,153 @@
             margin: 10px;
             border: none;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(40, 167, 69, 0.7);
             color: white;
             cursor: pointer;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(40, 167, 69, 0.9);
             font-size: clamp(1em, 3vw, 1.2em);
             min-width: 120px;
             min-height: 50px;
             font-weight: bold;
+            transition: all 0.3s ease;
         }
         
         .admin-panel button:hover, .admin-panel button:active {
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(40, 167, 69, 0.9);
             transform: scale(1.05);
         }
         
-        /* Access request dialog */
-        .access-request {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+        .admin-panel button.cancel {
+            background: rgba(220, 53, 69, 0.7);
+            border-color: rgba(220, 53, 69, 0.9);
+        }
+        
+        .admin-panel button.cancel:hover {
+            background: rgba(220, 53, 69, 0.9);
+        }
+        
+        /* Main content container */
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        /* Status display */
+        .status-display {
+            font-size: clamp(3em, 8vw, 6em);
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8);
+            line-height: 1.2;
+        }
+        
+        .status-display.locked {
+            color: #ff4444;
+        }
+        
+        .status-display.unlocked {
+            color: #44ff44;
+        }
+        
+        /* Username display */
+        .username-display {
+            font-size: clamp(1.5em, 4vw, 2.5em);
+            margin-bottom: 30px;
+            color: #ffffff;
+            font-weight: normal;
+        }
+        
+        /* Visual button (non-interactive) */
+        .display-button {
+            background-color: #404040;
+            border: 3px solid #666;
+            border-radius: 20px;
+            padding: 30px 50px;
+            font-size: clamp(1.2em, 3vw, 2em);
+            font-weight: bold;
+            color: #ffffff;
+            margin: 30px 0;
+            min-height: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
-        }
-        
-        .access-request-content {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 40px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
             text-align: center;
-            color: white;
-            max-width: 500px;
-            width: 90%;
+            line-height: 1.3;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            cursor: default;
+            user-select: none;
         }
         
-        .access-request input {
-            width: 100%;
+        .display-button.locked {
+            background-color: #663333;
+            border-color: #ff4444;
+            color: #ffdddd;
+        }
+        
+        .display-button.unlocked {
+            background-color: #336633;
+            border-color: #44ff44;
+            color: #ddffdd;
+        }
+        
+        /* Footer label */
+        .footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #1a1a1a;
             padding: 15px;
-            margin: 10px 0;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            font-size: clamp(1em, 3vw, 1.2em);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            text-align: center;
+            border-top: 2px solid #444;
         }
         
-        .access-request input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+        .footer-label {
+            font-size: clamp(1em, 2.5vw, 1.5em);
+            color: #cccccc;
+            margin: 0;
+            font-style: italic;
         }
         
-        .access-request button {
-            padding: 15px 30px;
-            margin: 10px;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            cursor: pointer;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            font-size: clamp(1em, 3vw, 1.2em);
-            min-width: 120px;
-            min-height: 50px;
-            font-weight: bold;
-        }
-        
-        .access-request button:hover, .access-request button:active {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-        
-        /* Responsive adjustments for very small screens */
+        /* Responsive adjustments */
         @media (max-width: 480px) {
             .container {
-                padding: 20px;
-                width: 95%;
+                padding: 20px 10px;
             }
             
-            h1 {
-                font-size: 2em;
-            }
-            
-            .admin-access {
-                width: 50px;
-                height: 50px;
-                font-size: 24px;
+            .display-button {
+                padding: 20px 30px;
+                margin: 20px 0;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Header with shear status and admin access -->
+    <!-- Default to LOCKED STATE for now - you can modify this based on your Flask logic -->
     <div class="header">
-        <div class="shear-title locked" id="shear-title">Shear Locked</div>
-        <div class="admin-access" id="admin-access" onclick="handleGearClick()" title="Admin Access">
+        <h1 class="title">Shear Safety Lock</h1>
+        <div class="admin-access" onclick="showAdminAccess()" title="Admin Access">
             ⚙️
         </div>
     </div>
 
     <div class="container">
-        <h1>Access Control System</h1>
-        
-        <div class="scan-message">
-            <div id="scan-message">Scan Card to Unlock Shear</div>
+        <div class="status-display locked">
+            🔒 Shear is Locked
         </div>
         
-        <div class="button-container">
-            <!-- Logout button appears when user is logged in -->
-            <button class="btn" id="logout-btn" onclick="logout()" style="display: none; background: rgba(220, 53, 69, 0.8); border-color: rgba(220, 53, 69, 0.9);">Logout</button>
+        <div class="display-button locked">
+            Scan Badge to Unlock
         </div>
     </div>
 
-    <!-- System status indicator -->
-    <div class="system-status">
-        <span class="system-indicator ok" id="system-indicator"></span>
-        <span id="system-text">System OK</span>
+    <div class="footer">
+        <p class="footer-label">Waiting for badge scan…</p>
     </div>
 
     <!-- Hidden admin access panel -->
@@ -507,297 +284,16 @@
             <h3>Admin Access</h3>
             <p>Enter admin password:</p>
             <input type="password" id="admin-password" placeholder="Password">
-            <button onclick="adminLogin()">Login</button>
-            <button onclick="hideAdminAccess()">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Access request dialog -->
-    <div id="access-request" class="access-request" style="display: none;">
-        <div class="access-request-content">
-            <h3>Access Request</h3>
-            <p>No access found for this card.</p>
-            <p>Would you like to request access?</p>
-            <input type="text" id="request-first-name" placeholder="Enter your first name" maxlength="25">
-            <input type="text" id="request-last-name" placeholder="Enter your last name" maxlength="25">
-            <input type="email" id="request-email" placeholder="Enter your email (optional)" maxlength="100">
             <br>
-            <button onclick="submitAccessRequest()">Request Access</button>
-            <button onclick="hideAccessRequest()">Cancel</button>
+            <button onclick="adminLogin()">Login</button>
+            <button class="cancel" onclick="hideAdminAccess()">Cancel</button>
         </div>
     </div>
 
     <script>
-        let lastCardRead = null;
-        let currentUserRole = null;
-        let currentUserName = null;
-        let sessionTimeout = null;
-        let sessionDuration = 5 * 60 * 1000; // 5 minutes in milliseconds
-        
-        function startSessionTimeout() {
-            // Clear any existing timeout
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
-            }
-            
-            // Set new timeout for 5 minutes
-            sessionTimeout = setTimeout(() => {
-                logout();
-                alert('Session expired after 5 minutes of inactivity');
-            }, sessionDuration);
-        }
-        
-        function resetSessionTimeout() {
-            if (currentUserRole) {
-                startSessionTimeout();
-            }
-        }
-        
-        function logout() {
-            // Clear session timeout
-            if (sessionTimeout) {
-                clearTimeout(sessionTimeout);
-                sessionTimeout = null;
-            }
-            
-            // Clear user info
-            currentUserRole = null;
-            currentUserName = null;
-            
-            // Update UI
-            updateGearSymbol();
-            const logoutBtn = document.getElementById('logout-btn');
-            if (logoutBtn) {
-                logoutBtn.style.display = 'none';
-                console.log('Logout button hidden');
-            }
-            
-            // Call server logout endpoint
-            fetch('/logout', {
-                method: 'GET'
-            }).then(() => {
-                // Reset the scan message
-                document.getElementById('scan-message').textContent = 'Scan Badge to Start Shear';
-            }).catch(error => {
-                console.error('Error during logout:', error);
-            });
-        }
-        
-        function updateStatus() {
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    const shearTitle = document.getElementById('shear-title');
-                    const scanMessage = document.getElementById('scan-message');
-                    const systemIndicator = document.getElementById('system-indicator');
-                    const systemText = document.getElementById('system-text');
-                    
-                    // Update shear title status
-                    if (data.shear && data.shear.unlocked) {
-                        shearTitle.className = 'shear-title unlocked';
-                        shearTitle.textContent = 'Shear Unlocked';
-                        
-                        const timeRemaining = Math.max(0, data.shear.timeout_remaining || 0);
-                        const minutes = Math.floor(timeRemaining / 60);
-                        const seconds = timeRemaining % 60;
-                        
-                        scanMessage.innerHTML = `Shear Operating<br>Timeout: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-                        
-                        // Show logout button when shear is unlocked (regardless of how we got here)
-                        const logoutBtn = document.getElementById('logout-btn');
-                        if (logoutBtn) {
-                            logoutBtn.style.display = 'inline-flex';
-                            console.log('Logout button shown - shear is unlocked');
-                        }
-                        
-                        // Update countdown every second
-                        if (window.shearCountdown) {
-                            clearInterval(window.shearCountdown);
-                        }
-                        
-                        let remainingSeconds = timeRemaining;
-                        window.shearCountdown = setInterval(() => {
-                            remainingSeconds--;
-                            if (remainingSeconds <= 0) {
-                                clearInterval(window.shearCountdown);
-                                scanMessage.innerHTML = 'Scan Card to Unlock Shear';
-                                shearTitle.className = 'shear-title locked';
-                                shearTitle.textContent = 'Shear Locked';
-                                
-                                // Auto logout on timeout
-                                if (currentUserRole) {
-                                    logout();
-                                }
-                                return;
-                            }
-                            const mins = Math.floor(remainingSeconds / 60);
-                            const secs = remainingSeconds % 60;
-                            scanMessage.innerHTML = `Shear Operating<br>Timeout: ${mins}:${secs.toString().padStart(2, '0')}`;
-                        }, 1000);
-                    } else {
-                        // Shear is locked
-                        shearTitle.className = 'shear-title locked';
-                        shearTitle.textContent = 'Shear Locked';
-                        
-                        // Hide logout button when shear is locked
-                        const logoutBtn = document.getElementById('logout-btn');
-                        if (logoutBtn) {
-                            logoutBtn.style.display = 'none';
-                            console.log('Logout button hidden - shear is locked');
-                        }
-                        
-                        // Clear countdown if exists
-                        if (window.shearCountdown) {
-                            clearInterval(window.shearCountdown);
-                        }
-                        scanMessage.innerHTML = 'Scan Card to Unlock Shear';
-                    }
-                    
-                    // Update system status indicator
-                    const cardReaderOk = data.card_reader && data.card_reader.connected;
-                    const labjackOk = data.labjack_u3 && data.labjack_u3.connected;
-                    
-                    if (cardReaderOk && labjackOk) {
-                        systemIndicator.className = 'system-indicator ok';
-                        systemText.textContent = 'System OK';
-                    } else if (!cardReaderOk && !labjackOk) {
-                        systemIndicator.className = 'system-indicator error';
-                        systemText.textContent = 'System Error: Card Reader & LabJack Offline';
-                        handleSystemError('Card Reader and LabJack offline');
-                    } else if (!cardReaderOk) {
-                        systemIndicator.className = 'system-indicator error';
-                        systemText.textContent = 'Card Reader Error';
-                        handleSystemError('Card Reader offline');
-                    } else if (!labjackOk) {
-                        systemIndicator.className = 'system-indicator warning';
-                        systemText.textContent = 'LabJack Warning';
-                        handleSystemError('LabJack offline');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error updating status:', error);
-                    const shearTitle = document.getElementById('shear-title');
-                    const systemIndicator = document.getElementById('system-indicator');
-                    const systemText = document.getElementById('system-text');
-                    
-                    shearTitle.className = 'shear-title locked';
-                    shearTitle.textContent = 'Shear Locked';
-                    systemIndicator.className = 'system-indicator error';
-                    systemText.textContent = 'Server Connection Error';
-                    handleSystemError('Server connection lost');
-                });
-        }
-        
-        function handleSystemError(errorType) {
-            // Check settings for error handling behavior
-            // For now, default to unlocking shear on error for safety
-            console.warn(`System error detected: ${errorType}`);
-            
-            // In a real implementation, check user settings for error behavior
-            // Default behavior: unlock shear for safety
-            fetch('/api/emergency-unlock', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason: errorType })
-            }).catch(err => console.error('Failed to send emergency unlock:', err));
-        }
-        
-        function updateGearSymbol() {
-            const gear = document.getElementById('admin-access');
-            if (currentUserRole === 'admin' || currentUserRole === 'manager') {
-                gear.classList.add('logged-in');
-                gear.title = `${currentUserRole.charAt(0).toUpperCase() + currentUserRole.slice(1)} Access - ${currentUserName}`;
-            } else {
-                gear.classList.remove('logged-in');
-                gear.title = 'Emergency Admin Access';
-            }
-        }
-        
-        function checkForCardRead() {
-            fetch('/api/last-card-read')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.card_id && data.card_id !== lastCardRead) {
-                        lastCardRead = data.card_id;
-                        document.getElementById('scan-message').innerHTML = 
-                            `Card Detected: ${data.card_id}<br>Processing...`;
-                        document.getElementById('last-activity').textContent = 
-                            new Date().toLocaleString();
-                        
-                        // Check user access level for this card
-                        console.log('Checking access for card:', data.card_id);
-                        fetch(`/api/card-access/${data.card_id}`)
-                            .then(response => response.json())
-                            .then(accessData => {
-                                console.log('Access response:', accessData);
-                                if (accessData.success && accessData.access_level) {
-                                    console.log('Access granted for:', accessData.user_name, 'Level:', accessData.access_level);
-                                    // Store user info for gear symbol
-                                    currentUserRole = accessData.access_level;
-                                    currentUserName = accessData.user_name;
-                                    updateGearSymbol();
-                                    
-                                    // Show logout button and start session timeout
-                                    const logoutBtn = document.getElementById('logout-btn');
-                                    if (logoutBtn) {
-                                        logoutBtn.style.display = 'inline-flex';
-                                        console.log('Logout button should now be visible');
-                                    } else {
-                                        console.error('Logout button element not found!');
-                                    }
-                                    startSessionTimeout();
-                                    
-                                    // Always show shear unlocked message and stay on operating page
-                                    document.getElementById('scan-message').innerHTML = 
-                                        `Access Granted<br>Shear Unlocked<br>${accessData.user_name}`;
-                                } else {
-                                    // Card not recognized - show access request dialog
-                                    currentUserRole = null;
-                                    currentUserName = null;
-                                    updateGearSymbol();
-                                    document.getElementById('scan-message').innerHTML = 
-                                        `No Access Found<br>Card ID: ${data.card_id}`;
-                                    
-                                    // Store the card ID for the access request
-                                    window.pendingCardId = data.card_id;
-                                    showAccessRequest();
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error checking card access:', error);
-                                currentUserRole = null;
-                                currentUserName = null;
-                                updateGearSymbol();
-                                document.getElementById('scan-message').innerHTML = 
-                                    `Error Processing Card`;
-                            });
-                        
-                        // Reset message after 5 seconds
-                        setTimeout(() => {
-                            document.getElementById('scan-message').textContent = 
-                                'Scan Badge to Start Shear';
-                        }, 5000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking card read:', error);
-                });
-        }
-        
-        function handleGearClick() {
-            if (currentUserRole === 'admin') {
-                // Admin with green gear - go directly to admin page
-                window.location.href = '/admin';
-            } else if (currentUserRole === 'manager') {
-                // Manager with green gear - go directly to manager page
-                window.location.href = '/manager';
-            } else {
-                // Red gear - show emergency admin login
-                showAdminAccess();
-            }
-        }
-        
+        // Admin access functions
         function showAdminAccess() {
+            clearInterval(autoRefreshInterval);
             document.getElementById('admin-panel').style.display = 'flex';
             document.getElementById('admin-password').focus();
         }
@@ -805,6 +301,13 @@
         function hideAdminAccess() {
             document.getElementById('admin-panel').style.display = 'none';
             document.getElementById('admin-password').value = '';
+            // Resume auto-refresh
+            autoRefreshInterval = setInterval(() => {
+                const adminPanel = document.getElementById('admin-panel');
+                if (!adminPanel || adminPanel.style.display === 'none') {
+                    window.location.reload();
+                }
+            }, 5000);
         }
         
         function adminLogin() {
@@ -820,85 +323,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Admin login successful - redirect to admin dashboard
                     window.location.href = '/admin';
                 } else {
                     alert('Invalid password');
                     document.getElementById('admin-password').value = '';
+                    document.getElementById('admin-password').focus();
                 }
             })
             .catch(error => {
-                console.error('Error during admin login:', error);
-                alert('Login error');
-            });
-        }
-        
-        function showAccessRequest() {
-            document.getElementById('access-request').style.display = 'flex';
-            document.getElementById('request-first-name').focus();
-        }
-        
-        function hideAccessRequest() {
-            document.getElementById('access-request').style.display = 'none';
-            document.getElementById('request-first-name').value = '';
-            document.getElementById('request-last-name').value = '';
-            document.getElementById('request-email').value = '';
-            window.pendingCardId = null;
-        }
-        
-        function submitAccessRequest() {
-            const firstName = document.getElementById('request-first-name').value.trim();
-            const lastName = document.getElementById('request-last-name').value.trim();
-            const email = document.getElementById('request-email').value.trim();
-            
-            if (!firstName) {
-                alert('Please enter your first name');
-                return;
-            }
-            
-            if (!lastName) {
-                alert('Please enter your last name');
-                return;
-            }
-            
-            if (!window.pendingCardId) {
-                alert('Error: No card ID found');
-                return;
-            }
-            
-            const fullName = `${firstName} ${lastName}`;
-            
-            fetch('/api/request-access', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    card_id: window.pendingCardId,
-                    name: fullName,
-                    first_name: firstName,
-                    last_name: lastName,
-                    email: email
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    hideAccessRequest();
-                    document.getElementById('scan-message').innerHTML = 
-                        `Access Request Submitted<br>Thank you, ${fullName}`;
-                    
-                    // Reset message after 5 seconds
-                    setTimeout(() => {
-                        document.getElementById('scan-message').textContent = 
-                            'Scan Badge to Start Shear';
-                    }, 5000);
-                } else {
-                    alert('Error submitting request: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error submitting access request:', error);
-                alert('Error submitting request');
+                alert('Login error: ' + error.message);
+                document.getElementById('admin-password').value = '';
             });
         }
         
@@ -909,40 +344,36 @@
                     adminLogin();
                 }
             });
-            
-            // Handle Enter key in access request fields
-            document.getElementById('request-first-name').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    document.getElementById('request-last-name').focus();
-                }
-            });
-            
-            document.getElementById('request-last-name').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    document.getElementById('request-email').focus();
-                }
-            });
-            
-            document.getElementById('request-email').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    submitAccessRequest();
-                }
-            });
         });
+
+        // Auto-refresh to check status changes (but not when admin panel is open)
+        let autoRefreshInterval = setInterval(() => {
+            // Only refresh if admin panel is not open
+            const adminPanel = document.getElementById('admin-panel');
+            if (!adminPanel || adminPanel.style.display === 'none') {
+                window.location.reload();
+            }
+        }, 5000); // Refresh every 5 seconds
         
-        // Update status every 5 seconds
-        setInterval(updateStatus, 5000);
-        setInterval(checkForCardRead, 1000);
+        // Stop auto-refresh when admin panel opens
+        function showAdminAccess() {
+            clearInterval(autoRefreshInterval);
+            document.getElementById('admin-panel').style.display = 'flex';
+            document.getElementById('admin-password').focus();
+        }
         
-        // Add event listeners for user activity to reset session timeout
-        document.addEventListener('click', resetSessionTimeout);
-        document.addEventListener('keypress', resetSessionTimeout);
-        document.addEventListener('mousemove', resetSessionTimeout);
-        document.addEventListener('scroll', resetSessionTimeout);
-        
-        // Initial load
-        updateStatus();
-        checkForCardRead();
+        // Resume auto-refresh when admin panel closes
+        function hideAdminAccess() {
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('admin-password').value = '';
+            // Resume auto-refresh
+            autoRefreshInterval = setInterval(() => {
+                const adminPanel = document.getElementById('admin-panel');
+                if (!adminPanel || adminPanel.style.display === 'none') {
+                    window.location.reload();
+                }
+            }, 5000);
+        }
     </script>
 </body>
 </html>

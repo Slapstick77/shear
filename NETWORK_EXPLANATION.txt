@@ -1,0 +1,266 @@
+SHEAR CONTROL SYSTEM - NETWORK ARCHITECTURE EXPLANATION
+========================================================
+
+Date: July 29, 2025
+Project: Shear Access Control System
+Location: /home/svend/shear-app/
+
+OVERVIEW
+--------
+This document provides a comprehensive explanation of the network architecture 
+for the shear control system, including how devices connect, IP addressing, 
+port usage, and troubleshooting information.
+
+CURRENT NETWORK TOPOLOGY
+-------------------------
+
+1. UBUNTU SERVER (Primary Control System)
+   - Hostname: Unknown (check with 'hostname' command)
+   - Primary IP: 10.43.22.136 (Ethernet interface)
+   - Connection: Wired Ethernet to network
+   - Role: Flask application host, LabJack U3 controller
+   - Services: Flask web server on port 5000
+   
+2. ANDROID TABLET (User Interface)
+   - Model: Samsung Galaxy (Device ID: R52N200HH8M)
+   - Connection: WiFi to "prodsys" network
+   - Access URL: http://10.43.22.136:5000
+   - Purpose: Touch interface for shear control operations
+
+3. LAPTOP (Management/SSH)
+   - Role: SSH client for remote administration
+   - Connection: Wired Ethernet to same network as server
+   - Used for: Development, troubleshooting, system management
+
+NETWORK CONFIGURATION DETAILS
+------------------------------
+
+A. IP ADDRESS SCHEME
+   Network: 10.43.22.0/24 (Private Class A subnet)
+   - Server: 10.43.22.136 (Ethernet connection)
+   - Tablet: Dynamic IP on "prodsys" WiFi (DHCP assigned)
+   - Laptop: Dynamic IP on Ethernet (DHCP assigned)
+   - Gateway: Likely 10.43.22.1 (router/access point)
+
+B. PORT USAGE
+   - Port 5000: Flask web application (HTTP)
+     * Bound to 0.0.0.0:5000 (all interfaces)
+     * Accessible from any device on the network
+     * Used by tablet browser to access control interface
+   
+   - Port 22: SSH (if enabled)
+     * For remote administration from laptop
+   
+   - Port 80/443: Standard web ports (not used by our app)
+
+C. FLASK APPLICATION BINDING
+   - Configuration: app.run(host='0.0.0.0', port=5000, debug=True)
+   - Meaning: Accepts connections from ANY network interface
+   - This allows tablet, laptop, or any network device to connect
+
+NETWORK INTERFACES
+------------------
+
+1. PRIMARY INTERFACE (Ethernet)
+   - Interface: eth0 (Ethernet)
+   - IP: 10.43.22.136
+   - Status: Active and working
+   - Used for: All server communications (wired connection)
+
+2. TABLET WIFI INTERFACE
+   - Network: "prodsys" WiFi
+   - Interface: WiFi connection to same network infrastructure
+   - IP: Dynamic (DHCP assigned on same 10.43.22.0/24 subnet)
+   - Used for: Tablet browser access to Flask application
+
+CONNECTION FLOW
+---------------
+
+TABLET → FLASK APPLICATION:
+1. Tablet connects to "prodsys" WiFi network
+2. Tablet obtains IP address via DHCP (10.43.22.x/24)
+3. Tablet browser navigates to http://10.43.22.136:5000
+4. Request travels through WiFi access point to network switch
+5. Ubuntu server (wired Ethernet) receives request on port 5000
+6. Flask application processes request
+7. Response sent back through switch to WiFi access point
+8. User interface displays in tablet browser
+
+LAPTOP → SERVER (SSH/Management):
+1. Laptop connects via wired Ethernet to same network
+2. SSH connection: ssh svend@10.43.22.136
+3. Direct terminal access for administration
+
+SERVICE DEPENDENCIES
+--------------------
+
+1. NETWORK SERVICES:
+   - NetworkManager: Manages Ethernet connections
+   - systemd-resolved: DNS resolution
+   - Router DHCP: Assigns IP addresses to tablet WiFi
+
+2. APPLICATION SERVICES:
+   - Flask web server (manual start required)
+   - LabJack U3 drivers (exodriver)
+   - Python virtual environment
+
+3. HARDWARE DEPENDENCIES:
+   - LabJack U3 device (USB connected)
+   - Ethernet adapter/connection for server and laptop
+   - WiFi access point for tablet ("prodsys" network)
+   - Network router/switch connecting Ethernet and WiFi
+
+FIREWALL CONSIDERATIONS
+-----------------------
+
+Ubuntu typically runs ufw (Uncomplicated Firewall):
+- Check status: sudo ufw status
+- Port 5000 should be open for Flask access
+- If blocked, open with: sudo ufw allow 5000
+
+Current assumption: Firewall allows internal network traffic
+
+PERSISTENCE AFTER POWER CYCLE
+------------------------------
+
+WHAT PERSISTS:
+✓ Network interface configuration (Ethernet settings)
+✓ WiFi connection credentials (tablet "prodsys" connection)
+✓ Static IP settings (if configured)
+✓ Installed packages and dependencies
+✓ Flask application code and configuration
+
+WHAT REQUIRES MANUAL RESTART:
+✗ Flask application (must run: python app.py)
+✗ Virtual environment activation
+✗ Any temporary network routes
+
+TROUBLESHOOTING GUIDE
+---------------------
+
+PROBLEM: "Port already in use" error
+SOLUTION:
+1. Check what's using port: ss -tlnp | grep :5000
+2. Kill existing process: kill <PID>
+3. Start Flask app fresh
+
+PROBLEM: Tablet cannot connect to Flask app
+DIAGNOSIS:
+1. Verify server IP: ip addr show
+2. Test Flask is running: ss -tlnp | grep :5000
+3. Test from server: curl http://localhost:5000
+4. Check firewall: sudo ufw status
+5. Verify tablet WiFi connected to "prodsys"
+6. Check network connectivity: ping between devices
+
+PROBLEM: Flask app won't start
+DIAGNOSIS:
+1. Check virtual environment: source venv/bin/activate
+2. Verify dependencies: pip list
+3. Check for syntax errors: python -m py_compile app.py
+4. Review error messages in terminal
+
+PROBLEM: Network connectivity issues
+DIAGNOSIS:
+1. Check Ethernet connection: ip addr show eth0
+2. Verify tablet WiFi: Check "prodsys" connection status
+3. Test cross-network connectivity: ping between Ethernet and WiFi devices
+4. Verify router/switch functionality
+
+NETWORK TESTING COMMANDS
+-------------------------
+
+FROM UBUNTU SERVER:
+- Check interfaces: ip addr show
+- Check routes: ip route show
+- Test Flask locally: curl http://localhost:5000
+- Check port usage: ss -tlnp | grep :5000
+- Test network connectivity: ping 8.8.8.8
+
+FROM TABLET BROWSER:
+- Primary URL: http://10.43.22.136:5000
+- Network: Connected to "prodsys" WiFi
+- Local test: http://localhost:5000 (won't work - different device)
+
+FROM LAPTOP (SSH):
+- Connect to server: ssh svend@10.43.22.136
+- Test Flask URL: curl http://10.43.22.136:5000
+- Monitor network: sudo tcpdump -i eth0 port 5000
+
+SECURITY CONSIDERATIONS
+-----------------------
+
+CURRENT SECURITY LEVEL: Internal Network Only
+- Flask app runs in debug mode (development)
+- No HTTPS encryption (HTTP only)
+- No authentication on network level
+- Application-level card-based authentication
+
+PRODUCTION RECOMMENDATIONS:
+- Disable Flask debug mode
+- Implement HTTPS with SSL certificates
+- Configure firewall rules for specific IPs only
+- Use VPN for remote access
+- Regular security updates
+
+PERFORMANCE CONSIDERATIONS
+--------------------------
+
+CURRENT SETUP:
+- Single-threaded Flask development server
+- No load balancing
+- No caching mechanisms
+- Direct database file access
+
+SCALING RECOMMENDATIONS:
+- Use production WSGI server (Gunicorn, uWSGI)
+- Implement database connection pooling
+- Add reverse proxy (Nginx)
+- Consider containerization (Docker)
+
+BACKUP AND RECOVERY
+-------------------
+
+CRITICAL FILES TO BACKUP:
+- /home/svend/shear-app/ (entire application directory)
+- /home/svend/access_list.json (user database)
+- Network configuration files (/etc/netplan/ or /etc/network/)
+- WiFi credentials (if stored locally)
+
+RECOVERY PROCEDURE:
+1. Restore application files
+2. Recreate virtual environment
+3. Install dependencies: pip install -r requirements.txt
+4. Verify network connectivity
+5. Start Flask application
+6. Test tablet connectivity
+
+FUTURE NETWORK IMPROVEMENTS
+----------------------------
+
+SHORT TERM:
+- Implement systemd service for Flask auto-start
+- Add network monitoring scripts
+- Create automated backup system
+
+LONG TERM:
+- Dedicated server hardware
+- Managed network switch
+- Enterprise WiFi access point
+- Centralized logging system
+- Network redundancy options
+
+CONTACT AND SUPPORT
+-------------------
+
+For network issues:
+1. Check this documentation first
+2. Run diagnostic commands listed above
+3. Review Flask application logs
+4. Check system logs: journalctl -f
+
+Network configured by: GitHub Copilot AI Assistant
+Last updated: July 29, 2025
+Documentation version: 1.0
+
+END OF NETWORK EXPLANATION

@@ -2,40 +2,67 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Shear Access Control System</title>
     <style>
-        body {
+        /* Targeted reset for fullscreen layout */
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
+            background-color: white !important;
+            overflow-x: hidden;
+            width: 100vw !important;
+            height: 100vh !important;
+            box-sizing: border-box;
         }
+        
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
             overflow: hidden;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+        }
+        
+        * {
+            box-sizing: border-box;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: red !important;
             color: white;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
+        }
+        .header h1 {
+            font-size: 1.8em;
+            margin: 0;
+        }
+        .header p {
+            font-size: 1em;
+            margin: 5px 0 0 0;
         }
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding: 15px;
+            margin: 0;
         }
         .status-card {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             border-left: 4px solid #ddd;
+            font-size: 0.9em;
+        }
+        .status-card h3 {
+            font-size: 1.3em;
+            margin: 0 0 10px 0;
         }
         .status-card.connected {
             border-left-color: #28a745;
@@ -115,17 +142,18 @@
             cursor: not-allowed;
         }
         .controls {
-            padding: 20px;
+            padding: 15px;
             border-top: 1px solid #eee;
         }
         .btn {
             background: #007bff;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             margin: 5px;
+            font-size: 14px;
         }
         .btn:hover {
             background: #0056b3;
@@ -143,14 +171,14 @@
             background: #1e7e34;
         }
         .logs {
-            padding: 20px;
+            padding: 15px;
             border-top: 1px solid #eee;
         }
         .log-container {
             background: #f8f9fa;
             border: 1px solid #ddd;
             border-radius: 4px;
-            height: 200px;
+            height: 150px;
             overflow-y: auto;
             padding: 10px;
             font-family: monospace;
@@ -173,7 +201,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Shear Access Control System</h1>
+            <h1>🔧 Shear Access Control System</h1>
             <p>USB HID Card Reader Integration</p>
         </div>
         
@@ -245,6 +273,7 @@
                 </h3>
                 <p><strong>Status:</strong> Running</p>
                 <p><strong>Local URL:</strong> http://localhost:5000</p>
+                <p><strong>USB Tablet URL:</strong> http://192.168.42.129:5000</p>
                 <p><strong>Port:</strong> 5000</p>
                 <p><strong>Uptime:</strong> <span id="uptime">Calculating...</span></p>
             </div>
@@ -309,17 +338,25 @@
                                 // Input 4 (FIO4) - Shear sensor
                                 const input4 = states.digital_inputs['FIO4'];
                                 const input4Element = document.getElementById('input-4');
-                                if (input4Element) {
-                                    input4Element.textContent = input4 ? 'ON' : 'OFF';
-                                    input4Element.className = `io-status ${input4 ? 'on' : 'off'}`;
+                                if (input4Element && input4 !== undefined) {
+                                    const newText = input4 ? 'ON' : 'OFF';
+                                    const newClass = `io-status ${input4 ? 'on' : 'off'}`;
+                                    if (input4Element.textContent !== newText) {
+                                        input4Element.textContent = newText;
+                                        input4Element.className = newClass;
+                                    }
                                 }
                                 
                                 // Input 5 (FIO5) - Motion sensor
                                 const input5 = states.digital_inputs['FIO5'];
                                 const input5Element = document.getElementById('input-5');
-                                if (input5Element) {
-                                    input5Element.textContent = input5 ? 'ON' : 'OFF';
-                                    input5Element.className = `io-status ${input5 ? 'on' : 'off'}`;
+                                if (input5Element && input5 !== undefined) {
+                                    const newText = input5 ? 'ON' : 'OFF';
+                                    const newClass = `io-status ${input5 ? 'on' : 'off'}`;
+                                    if (input5Element.textContent !== newText) {
+                                        input5Element.textContent = newText;
+                                        input5Element.className = newClass;
+                                    }
                                 }
                             }
                             
