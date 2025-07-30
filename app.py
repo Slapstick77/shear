@@ -50,6 +50,8 @@ session_logs = []
 last_card_read = None
 shear_unlock_timer = None
 shear_unlocked = False
+shear_unlock_timestamp = None
+shear_unlock_user = None
 
 # Add datetime filter for Jinja2 templates
 @app.template_filter('datetime')
@@ -99,7 +101,7 @@ def initialize_components():
 
 def handle_card_read(card_data):
     """Handle card read event"""
-    global last_card_read, session_logs, shear_unlock_timer, shear_unlocked
+    global last_card_read, session_logs, shear_unlock_timer, shear_unlocked, shear_unlock_user
     try:
         card_id = card_data.get('card_id', '').strip()
         logger.info(f"Card read: {card_id}")
@@ -120,19 +122,15 @@ def handle_card_read(card_data):
         # Control shear based on access decision
         if validation_result['access_granted']:
             # Grant access and unlock shear
-            unlock_shear(card_id)
+            user_info = validation_result.get('user_info', {})
+            unlock_shear(card_id, user_info)
             
             log_entry = {
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'message': f"Access granted for card: {card_id} - Shear unlocked"
             }
         else:
-            # Deny access
-            if labjack_u3 and labjack_u3.is_connected():
-                labjack_u3.set_status_led('red', True)  # Red LED on
-                # Turn off red LED after 2 seconds
-                threading.Timer(2.0, lambda: labjack_u3.set_status_led('red', False)).start()
-            
+            # Deny access - no LED control needed
             log_entry = {
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'message': f"Access denied for card: {card_id} - {validation_result.get('reason', 'Unknown')}"
@@ -147,9 +145,9 @@ def handle_card_read(card_data):
     except Exception as e:
         logger.error(f"Error handling card read: {e}")
 
-def unlock_shear(card_id):
+def unlock_shear(card_id, user_info=None):
     """Unlock shear and start monitoring"""
-    global shear_unlock_timer, shear_unlocked
+    global shear_unlock_timer, shear_unlocked, shear_unlock_timestamp, shear_unlock_user
     
     try:
         # Cancel any existing timer
@@ -159,9 +157,11 @@ def unlock_shear(card_id):
         # Set shear output HIGH to unlock
         if labjack_u3 and labjack_u3.is_connected():
             labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], True)
-            labjack_u3.set_status_led('green', True)  # Green LED on
+            # No LED control - just unlock the shear
         
         shear_unlocked = True
+        shear_unlock_timestamp = datetime.now()
+        shear_unlock_user = user_info or {}
         logger.info(f"Shear unlocked for card: {card_id}")
         
         # Start timeout timer
@@ -172,7 +172,7 @@ def unlock_shear(card_id):
 
 def lock_shear():
     """Lock shear and stop monitoring"""
-    global shear_unlock_timer, shear_unlocked
+    global shear_unlock_timer, shear_unlocked, shear_unlock_timestamp, shear_unlock_user
     
     try:
         # Cancel timer
@@ -183,9 +183,11 @@ def lock_shear():
         # Set shear output LOW to lock
         if labjack_u3 and labjack_u3.is_connected():
             labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], False)
-            labjack_u3.set_status_led('green', False)  # Turn off green LED
+            # No LED control - just lock the shear
         
         shear_unlocked = False
+        shear_unlock_timestamp = None
+        shear_unlock_user = None
         logger.info("Shear locked due to timeout")
         
         # Add to session logs
@@ -200,11 +202,14 @@ def lock_shear():
 
 def start_shear_timeout_timer():
     """Start or restart the shear timeout timer"""
-    global shear_unlock_timer
+    global shear_unlock_timer, shear_unlock_timestamp
     
     # Cancel existing timer
     if shear_unlock_timer:
         shear_unlock_timer.cancel()
+    
+    # Reset timestamp for timer calculation
+    shear_unlock_timestamp = datetime.now()
     
     # Start new timer
     timeout_seconds = SHEAR_SETTINGS['unlock_timeout']
@@ -398,11 +403,14 @@ def api_simulate_card_read():
             validation_result = card_manager.validate_card(card_id)
             
             if validation_result.get('access_granted'):
+                # Grant access and unlock shear (same as real card read)
+                unlock_shear(card_id)
                 log_entry = {
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'message': f"[TEST] Access granted for card: {card_id}"
+                    'message': f"[TEST] Access granted for card: {card_id} - Shear unlocked"
                 }
             else:
+                # Deny access - no LED control needed
                 log_entry = {
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'message': f"[TEST] Access denied for card: {card_id} - {validation_result.get('reason', 'Unknown')}"
@@ -437,6 +445,30 @@ def api_admin_login():
     except Exception as e:
         logger.error(f"Error during admin login: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/auth-status')
+def api_auth_status():
+    """Get current authentication status"""
+    try:
+        user_role = session.get('user_role')
+        login_method = session.get('login_method')
+        
+        if user_role:
+            return jsonify({
+                'authenticated': True,
+                'role': user_role,
+                'login_method': login_method
+            })
+        else:
+            return jsonify({
+                'authenticated': False,
+                'role': None,
+                'login_method': None
+            })
+    
+    except Exception as e:
+        logger.error(f"Error checking auth status: {e}")
+        return jsonify({'authenticated': False, 'role': None, 'login_method': None})
 
 @app.route('/api/user-permissions')
 def api_user_permissions():
@@ -1011,13 +1043,13 @@ def api_factory_reset():
 @app.route('/api/status')
 def api_status():
     """API endpoint to check system status"""
-    global shear_unlocked, shear_unlock_timer
+    global shear_unlocked, shear_unlock_timer, shear_unlock_timestamp, shear_unlock_user
     
     # Calculate remaining time if timer is active
     remaining_time = 0
-    if shear_unlock_timer and shear_unlocked:
-        # This is an approximation since threading.Timer doesn't expose remaining time
-        remaining_time = SHEAR_SETTINGS['unlock_timeout']  # We'll update this with JavaScript
+    if shear_unlock_timer and shear_unlocked and shear_unlock_timestamp:
+        elapsed_time = (datetime.now() - shear_unlock_timestamp).total_seconds()
+        remaining_time = max(0, SHEAR_SETTINGS['unlock_timeout'] - elapsed_time)
     
     status = {
         'timestamp': datetime.now().isoformat(),
@@ -1036,11 +1068,23 @@ def api_status():
             'timeout_remaining': remaining_time,
             'timeout_setting': SHEAR_SETTINGS['unlock_timeout'],
             'output_pin': SHEAR_SETTINGS['shear_output_pin'],
-            'motion_pin': SHEAR_SETTINGS['motion_input_pin']
+            'motion_pin': SHEAR_SETTINGS['motion_input_pin'],
+            'unlock_user': shear_unlock_user
         },
         'recent_logs': session_logs[-5:] if session_logs else []
     }
     return jsonify(status)
+
+@app.route('/api/manual-lock', methods=['POST'])
+def manual_lock():
+    """Manually lock the shear"""
+    try:
+        # Lock the shear immediately
+        lock_shear()
+        return jsonify({'success': True, 'message': 'Shear locked manually'})
+    except Exception as e:
+        logger.error(f"Error in manual lock: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/card-events', methods=['GET'])
 def get_card_events():

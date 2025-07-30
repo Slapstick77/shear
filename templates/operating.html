@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shear Safety Lock</title>
+    <title>Shear Access</title>
     <style>
         /* Factory display optimization */
         * {
@@ -80,6 +80,56 @@
             transform: scale(1.1);
             border-color: rgba(255, 255, 255, 0.5);
             color: #ffffff;
+        }
+        
+        /* Admin logged in state - green gear */
+        .admin-access.logged-in {
+            background: rgba(40, 167, 69, 0.3);
+            border-color: rgba(40, 167, 69, 0.7);
+            color: #28a745;
+        }
+        
+        .admin-access.logged-in:hover, .admin-access.logged-in:active {
+            background: rgba(40, 167, 69, 0.5);
+            border-color: rgba(40, 167, 69, 0.9);
+            color: #ffffff;
+        }
+        
+        /* Key icon for card authentication */
+        .key-access {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(128, 128, 128, 0.1);
+            border: 2px solid rgba(128, 128, 128, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 36px;
+            min-height: 36px;
+            color: #888888;
+            cursor: not-allowed;
+        }
+        
+        /* Key active state - only when logged in with card */
+        .key-access.active {
+            background: rgba(40, 167, 69, 0.3);
+            border-color: rgba(40, 167, 69, 0.7);
+            color: #28a745;
+            cursor: pointer;
+        }
+        
+        .key-access.active:hover, .key-access.active:active {
+            background: rgba(40, 167, 69, 0.5);
+            border-color: rgba(40, 167, 69, 0.9);
+            color: #ffffff;
+            transform: scale(1.1);
         }
         
         /* Admin panel styles */
@@ -190,6 +240,16 @@
             font-weight: normal;
         }
         
+        /* Instruction text (plain text, no button styling) */
+        .instruction-text {
+            font-size: clamp(1.5em, 4vw, 2.5em);
+            color: #ffffff;
+            margin: 30px 0;
+            font-weight: normal;
+            text-align: center;
+            line-height: 1.3;
+        }
+        
         /* Visual button (non-interactive) */
         .display-button {
             background-color: #404040;
@@ -221,6 +281,29 @@
             background-color: #336633;
             border-color: #44ff44;
             color: #ddffdd;
+        }
+        
+        /* Manual lock button styles */
+        .manual-lock-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(220, 53, 69, 0.8);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            border: 2px solid rgba(220, 53, 69, 0.9);
+            transition: all 0.3s ease;
+        }
+        
+        .manual-lock-btn:hover {
+            background: rgba(220, 53, 69, 1.0);
+            transform: scale(1.05);
+        }
+        
+        .manual-lock-btn:active {
+            transform: scale(0.95);
         }
         
         /* Footer label */
@@ -257,9 +340,14 @@
 </head>
 <body>
     <!-- Default to LOCKED STATE for now - you can modify this based on your Flask logic -->
+    <!-- Key icon for card authentication (top left) -->
+    <div id="key-access" class="key-access" onclick="keyAccess()" title="Card Access - Disabled">
+        🔑
+    </div>
+    
     <div class="header">
-        <h1 class="title">Shear Safety Lock</h1>
-        <div class="admin-access" onclick="showAdminAccess()" title="Admin Access">
+        <h1 class="title">Shear Access</h1>
+        <div id="admin-access" class="admin-access" onclick="showAdminAccess()" title="Admin Access">
             ⚙️
         </div>
     </div>
@@ -269,8 +357,8 @@
             🔒 Shear is Locked
         </div>
         
-        <div class="display-button locked">
-            Scan Badge to Unlock
+        <div class="instruction-text">
+            Scan Badge at Reader
         </div>
     </div>
 
@@ -291,11 +379,155 @@
     </div>
 
     <script>
+        // Authentication state management
+        let isAdminLoggedIn = false;
+        let isCardLoggedIn = false;
+        let userRole = null;
+        
+        // Check authentication status on page load
+        function checkAuthStatus() {
+            fetch('/api/auth-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.authenticated) {
+                        userRole = data.role;
+                        if (data.login_method === 'password' && data.role === 'admin') {
+                            setAdminLoggedIn(true);
+                        } else if (data.login_method === 'card') {
+                            // All card access levels (admin, manager, user) should unlock shear
+                            // But only admin and manager get key button access
+                            if (data.role === 'admin' || data.role === 'manager') {
+                                setCardLoggedIn(true, data.role);
+                            }
+                            // For user level, we don't show key button but shear should still unlock
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.log('Auth status check failed:', error);
+                });
+        }
+        
+        // Check shear status and update display
+        function checkShearStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateShearDisplay(data.shear);
+                })
+                .catch(error => {
+                    console.log('Shear status check failed:', error);
+                });
+        }
+        
+        // Update shear display based on status
+        function updateShearDisplay(shearData) {
+            const statusDisplay = document.querySelector('.status-display');
+            const footerLabel = document.querySelector('.footer-label');
+            
+            if (shearData.unlocked) {
+                // Shear is unlocked
+                const userName = shearData.unlock_user?.name || 'Unknown User';
+                statusDisplay.className = 'status-display unlocked';
+                
+                // Create unlock display with user name and lock button
+                statusDisplay.innerHTML = `
+                    <div>🔓 Shear Unlocked by ${userName}</div>
+                    <button onclick="manualLock()" class="manual-lock-btn">🔒 Lock Now</button>
+                `;
+                
+                // Only show timer when 30 seconds or less remain
+                const remaining = Math.floor(shearData.timeout_remaining);
+                if (remaining <= 30 && remaining > 0) {
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    footerLabel.textContent = `Shear has been idle, will lock in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    footerLabel.textContent = `Shear in use by ${userName}`;
+                }
+            } else {
+                // Shear is locked
+                statusDisplay.className = 'status-display locked';
+                statusDisplay.innerHTML = '🔒 Shear is Locked';
+                footerLabel.textContent = 'Waiting for badge scan…';
+            }
+        }
+        
+        // Manual lock function
+        function manualLock() {
+            fetch('/api/manual-lock', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Status will update automatically on next check
+                    console.log('Shear locked manually');
+                } else {
+                    console.error('Failed to lock shear:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error locking shear:', error);
+            });
+        }
+        
+        // Set admin logged in state (password login)
+        function setAdminLoggedIn(loggedIn) {
+            isAdminLoggedIn = loggedIn;
+            const adminGear = document.getElementById('admin-access');
+            if (loggedIn) {
+                adminGear.classList.add('logged-in');
+                adminGear.title = 'Admin Access - Logged In (Click to go to Dashboard)';
+            } else {
+                adminGear.classList.remove('logged-in');
+                adminGear.title = 'Admin Access';
+            }
+        }
+        
+        // Set card logged in state (card login)
+        function setCardLoggedIn(loggedIn, role) {
+            isCardLoggedIn = loggedIn;
+            userRole = role;
+            const keyIcon = document.getElementById('key-access');
+            if (loggedIn && (role === 'admin' || role === 'manager')) {
+                keyIcon.classList.add('active');
+                keyIcon.title = `Card Access - ${role.charAt(0).toUpperCase() + role.slice(1)} (Click to go to Dashboard)`;
+                keyIcon.style.cursor = 'pointer';
+            } else {
+                keyIcon.classList.remove('active');
+                keyIcon.title = 'Card Access - Disabled';
+                keyIcon.style.cursor = 'not-allowed';
+            }
+        }
+        
         // Admin access functions
         function showAdminAccess() {
+            // If admin is already logged in, bypass login and go directly to dashboard
+            if (isAdminLoggedIn) {
+                window.location.href = '/admin';
+                return;
+            }
+            
             clearInterval(autoRefreshInterval);
             document.getElementById('admin-panel').style.display = 'flex';
             document.getElementById('admin-password').focus();
+        }
+        
+        // Key access function
+        function keyAccess() {
+            if (isCardLoggedIn && (userRole === 'admin' || userRole === 'manager')) {
+                // Redirect based on role
+                if (userRole === 'admin') {
+                    window.location.href = '/admin';
+                } else if (userRole === 'manager') {
+                    window.location.href = '/manager';
+                }
+            }
+            // If not logged in with card, do nothing (icon is disabled)
         }
         
         function hideAdminAccess() {
@@ -323,6 +555,10 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Set admin logged in state
+                    setAdminLoggedIn(true);
+                    // Hide admin panel
+                    hideAdminAccess();
                     // Admin login successful - redirect to admin dashboard
                     window.location.href = '/admin';
                 } else {
@@ -346,34 +582,44 @@
             });
         });
 
-        // Auto-refresh to check status changes (but not when admin panel is open)
-        let autoRefreshInterval = setInterval(() => {
-            // Only refresh if admin panel is not open
+        // Auto-check status every 2 seconds
+        let statusCheckInterval = setInterval(() => {
+            // Only check status if admin panel is not open
             const adminPanel = document.getElementById('admin-panel');
             if (!adminPanel || adminPanel.style.display === 'none') {
-                window.location.reload();
+                checkAuthStatus();
+                checkShearStatus();
             }
-        }, 5000); // Refresh every 5 seconds
+        }, 2000); // Check every 2 seconds
         
-        // Stop auto-refresh when admin panel opens
+        // Stop status checks when admin panel opens
         function showAdminAccess() {
-            clearInterval(autoRefreshInterval);
+            clearInterval(statusCheckInterval);
             document.getElementById('admin-panel').style.display = 'flex';
             document.getElementById('admin-password').focus();
         }
         
-        // Resume auto-refresh when admin panel closes
+        // Resume status checks when admin panel closes
         function hideAdminAccess() {
             document.getElementById('admin-panel').style.display = 'none';
             document.getElementById('admin-password').value = '';
-            // Resume auto-refresh
-            autoRefreshInterval = setInterval(() => {
+            // Resume status checks
+            statusCheckInterval = setInterval(() => {
                 const adminPanel = document.getElementById('admin-panel');
                 if (!adminPanel || adminPanel.style.display === 'none') {
-                    window.location.reload();
+                    checkAuthStatus();
+                    checkShearStatus();
                 }
-            }, 5000);
+            }, 2000);
         }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication status on page load
+            checkAuthStatus();
+            // Check shear status on page load
+            checkShearStatus();
+        });
     </script>
 </body>
 </html>

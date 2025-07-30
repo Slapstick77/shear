@@ -154,6 +154,100 @@
         .log-timestamp {
             color: #666;
         }
+        
+        /* Toggle switch styles */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #28a745;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .toggle-switch.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        .toggle-switch.disabled .toggle-slider {
+            cursor: not-allowed;
+        }
+        
+        /* Red notification dot */
+        .nav-btn {
+            position: relative;
+        }
+        
+        .notification-dot {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            background-color: #dc3545;
+            border-radius: 50%;
+            border: 2px solid white;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .nav-btn.has-notifications .notification-dot {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -165,7 +259,10 @@
         
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
-            <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
+            <a href="#" class="nav-btn" id="requests-tab" onclick="showSection('requests')">
+                Access Requests
+                <span class="notification-dot"></span>
+            </a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="/" class="nav-btn">← Back to Operating</a>
@@ -175,28 +272,6 @@
         <div class="content">
             <!-- Users Section -->
             <div id="users" class="section active">
-                <div class="card">
-                    <h3>Add New User</h3>
-                    <form id="add-user-form">
-                        <div class="form-group">
-                            <label for="card-id">Card ID:</label>
-                            <input type="text" id="card-id" name="card_id" placeholder="Enter card ID" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="user-name">User Name:</label>
-                            <input type="text" id="user-name" name="user_name" placeholder="Enter user name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="access-level">Access Level:</label>
-                            <select id="access-level" name="access_level">
-                                <option value="user">User</option>
-                                <option value="manager">Manager</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn success">Add User</button>
-                    </form>
-                </div>
-                
                 <div class="card">
                     <h3>Current Users</h3>
                     <div class="user-list" id="user-list">
@@ -211,6 +286,19 @@
             <div id="requests" class="section">
                 <div class="card">
                     <h3>Pending Access Requests</h3>
+                    
+                    <!-- Auto Accept Toggle -->
+                    <div class="toggle-container">
+                        <label for="auto-accept-toggle">
+                            <strong>Auto Accept:</strong> Automatically grant User access to new requests
+                        </label>
+                        <label class="toggle-switch" id="auto-accept-switch">
+                            <input type="checkbox" id="auto-accept-toggle" onchange="toggleAutoAccept()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span id="auto-accept-status" style="font-size: 12px; color: #666;">Disabled</span>
+                    </div>
+                    
                     <div style="margin-bottom: 10px;">
                         <button class="btn" onclick="loadAccessRequests()">Refresh Requests</button>
                     </div>
@@ -344,39 +432,6 @@
                 });
         }
         
-        // Add user form submission
-        document.getElementById('add-user-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const userData = {
-                card_id: formData.get('card_id'),
-                user_name: formData.get('user_name'),
-                access_level: formData.get('access_level')
-            };
-            
-            fetch('/api/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(userData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('User added successfully');
-                    e.target.reset();
-                    loadUsers();
-                } else {
-                    alert('Error adding user: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error adding user: ' + error.message);
-            });
-        });
-        
         function removeUser(cardId) {
             if (confirm('Are you sure you want to remove this user?')) {
                 fetch(`/api/users/${cardId}`, {
@@ -507,8 +562,87 @@
             }
         }
         
+        // Auto Accept Toggle Functions
+        function toggleAutoAccept() {
+            const toggle = document.getElementById('auto-accept-toggle');
+            const status = document.getElementById('auto-accept-status');
+            
+            fetch('/api/auto-accept', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled: toggle.checked })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    status.textContent = toggle.checked ? 'Enabled' : 'Disabled';
+                    status.style.color = toggle.checked ? '#28a745' : '#666';
+                    
+                    // Update notification dot if requests exist
+                    updateNotificationDot();
+                } else {
+                    alert('Error: ' + data.message);
+                    // Revert toggle state on error
+                    toggle.checked = !toggle.checked;
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling auto-accept:', error);
+                alert('Error updating auto-accept setting');
+                // Revert toggle state on error
+                toggle.checked = !toggle.checked;
+            });
+        }
+        
+        function loadAutoAcceptState() {
+            fetch('/api/auto-accept')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const toggle = document.getElementById('auto-accept-toggle');
+                        const status = document.getElementById('auto-accept-status');
+                        const switchElement = document.getElementById('auto-accept-switch');
+                        
+                        toggle.checked = data.enabled;
+                        status.textContent = data.enabled ? 'Enabled' : 'Disabled';
+                        status.style.color = data.enabled ? '#28a745' : '#666';
+                        
+                        // Check user role and disable for managers
+                        if (data.user_role === 'manager') {
+                            switchElement.classList.add('disabled');
+                            toggle.disabled = true;
+                            status.textContent = 'Admin Only';
+                            status.style.color = '#999';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading auto-accept state:', error);
+                });
+        }
+        
+        function updateNotificationDot() {
+            fetch('/api/access-requests')
+                .then(response => response.json())
+                .then(data => {
+                    const requestsTab = document.getElementById('requests-tab');
+                    if (data.success && data.requests.length > 0) {
+                        requestsTab.classList.add('has-notifications');
+                    } else {
+                        requestsTab.classList.remove('has-notifications');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking requests for notification:', error);
+                });
+        }
+        
         // Load initial data
         loadUsers();
+        loadAutoAcceptState();
+        updateNotificationDot();
 
         // Mobile Detection and Fullscreen Functionality
         function isMobileDevice() {

@@ -2,10 +2,10 @@
   "20232026": {
     "name": "Svend Hansen",
     "department": "",
-    "access_level": "user",
+    "access_level": "admin",
     "active": true,
     "created_date": "2025-07-25T21:14:49.025378",
-    "last_access": "2025-07-30T16:23:31.079261",
+    "last_access": "2025-07-30T21:31:03.247145",
     "access_times": null,
     "notes": "Added via access request on 2025-07-25 21:14:49"
   }
