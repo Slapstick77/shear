@@ -15,6 +15,7 @@ import csv
 import io
 from card_reader import CardReader
 from labjack_u3 import LabJackU3
+import database as db
 
 # Configure logging
 logging.basicConfig(
