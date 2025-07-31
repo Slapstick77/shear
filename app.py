@@ -1092,9 +1092,8 @@ def api_backup_database():
 def api_reset_database():
     """Reset database (admin only)"""
     try:
-        if card_manager:
-            # In a real implementation, clear the database
-            pass
+        # Reset database using the database module
+        db.reset_database()
         return jsonify({'success': True, 'message': 'Database reset successfully'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1105,9 +1104,8 @@ def api_factory_reset():
     global session_logs
     try:
         session_logs = []
-        if card_manager:
-            # In a real implementation, reset everything to factory defaults
-            pass
+        # Reset database to factory defaults
+        db.reset_database()
         return jsonify({'success': True, 'message': 'Factory reset completed'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1180,9 +1178,10 @@ def approve_request():
             return jsonify({'success': False, 'message': 'Card ID and name are required'}), 400
         
         # Add user to access list
-        if card_manager.add_card(card_id, name, department, access_level, f"Shift: {shift}" if shift else ""):
+        success = db.add_user(card_id, name, access_level, department, 'active')
+        if success:
             # Remove from pending requests
-            pending_requests = [req for req in pending_requests if req['card_id'] != card_id]
+            db.remove_pending_request(card_id)
             logger.info(f"Approved access for card {card_id} - {name}")
             return jsonify({'success': True, 'message': f'Access approved for {name}'})
         else:
