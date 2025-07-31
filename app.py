@@ -434,7 +434,7 @@ def api_user_permissions():
 @app.route('/api/last-card-status')
 def api_last_card_status():
     """Get the last card read with its status"""
-    global last_card_read, pending_requests
+    global last_card_read
     
     if not last_card_read:
         return jsonify({
@@ -447,28 +447,16 @@ def api_last_card_status():
     card_id = last_card_read
     
     # Check if card has pending request
-    pending_request = None
-    for req in pending_requests:
-        if req['card_id'] == card_id:
-            pending_request = req
-            break
+    pending_request = db.get_pending_request(card_id)
     
     if pending_request:
-        if pending_request.get('user_requested', False):
-            return jsonify({
-                'success': True,
-                'card_id': card_id,
-                'status': 'authorization_pending',
-                'message': 'Authorization pending - Admin approval required',
-                'user_name': f"{pending_request.get('first_name', '')} {pending_request.get('last_name', '')}".strip()
-            })
-        else:
-            return jsonify({
-                'success': True,
-                'card_id': card_id,
-                'status': 'info_required',
-                'message': 'Please provide your information to request access'
-            })
+        return jsonify({
+            'success': True,
+            'card_id': card_id,
+            'status': 'authorization_pending',
+            'message': 'Authorization pending - Admin approval required',
+            'user_name': pending_request.get('name', 'Unknown User')
+        })
     
     # Check if card exists in access list
     user = db.get_user(card_id)
@@ -1215,27 +1203,41 @@ def deny_request():
 @app.route('/api/submit-access-request', methods=['POST'])
 def submit_access_request():
     """User submits their information for access request"""
-    global pending_requests
     try:
         data = request.get_json()
         card_id = data.get('card_id')
         first_name = data.get('first_name', '').strip()
         last_name = data.get('last_name', '').strip()
+        email = data.get('email', '').strip()
+        department = data.get('department', '').strip()
+        shift = data.get('shift', '').strip()
         
         if not card_id or not first_name or not last_name:
             return jsonify({'success': False, 'message': 'Card ID, first name, and last name are required'}), 400
         
-        # Find and update the pending request
-        for pending_req in pending_requests:
-            if pending_req['card_id'] == card_id:
-                pending_req['first_name'] = first_name
-                pending_req['last_name'] = last_name
-                pending_req['user_requested'] = True
-                pending_req['last_scan'] = datetime.now().isoformat()
-                logger.info(f"User {first_name} {last_name} submitted access request for card {card_id}")
-                return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+        # Check if user already exists
+        existing_user = db.get_user(card_id)
+        if existing_user:
+            return jsonify({'success': False, 'message': 'Card already has access'}), 400
         
-        return jsonify({'success': False, 'message': 'Pending request not found'}), 404
+        # Check if pending request already exists
+        existing_request = db.get_pending_request(card_id)
+        if existing_request:
+            # Update existing request with user information
+            full_name = f"{first_name} {last_name}".strip()
+            success = db.remove_pending_request(card_id)
+            if success:
+                success = db.add_pending_request(card_id, full_name, first_name, last_name, email, department, shift)
+        else:
+            # Create new pending request
+            full_name = f"{first_name} {last_name}".strip()
+            success = db.add_pending_request(card_id, full_name, first_name, last_name, email, department, shift)
+        
+        if success:
+            logger.info(f"User {first_name} {last_name} submitted access request for card {card_id}")
+            return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to submit access request'}), 500
         
     except Exception as e:
         logger.error(f"Error submitting access request: {e}")

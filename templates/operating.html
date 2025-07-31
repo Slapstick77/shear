@@ -408,6 +408,24 @@
             <div style="margin: 15px 0;">
                 <input type="text" id="first-name" placeholder="First Name" required>
                 <input type="text" id="last-name" placeholder="Last Name" required>
+                <input type="email" id="email" placeholder="Email Address">
+                <select id="department" style="width: 100%; padding: 15px; margin: 15px 0; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; font-size: clamp(1em, 3vw, 1.3em); border: 2px solid #666;">
+                    <option value="">Select Department</option>
+                    <option value="Production">Production</option>
+                    <option value="Quality Control">Quality Control</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Management">Management</option>
+                    <option value="Administration">Administration</option>
+                    <option value="Other">Other</option>
+                </select>
+                <select id="shift" style="width: 100%; padding: 15px; margin: 15px 0; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; font-size: clamp(1em, 3vw, 1.3em); border: 2px solid #666;">
+                    <option value="">Select Shift</option>
+                    <option value="Day Shift">Day Shift (6AM - 2PM)</option>
+                    <option value="Evening Shift">Evening Shift (2PM - 10PM)</option>
+                    <option value="Night Shift">Night Shift (10PM - 6AM)</option>
+                    <option value="Flexible">Flexible Schedule</option>
+                </select>
             </div>
             <div style="text-align: center; margin: 20px 0;">
                 <button onclick="submitAccessRequest()" class="access-btn">Submit Request</button>
@@ -745,12 +763,18 @@
             document.getElementById('access-request-form').style.display = 'none';
             document.getElementById('first-name').value = '';
             document.getElementById('last-name').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('department').value = '';
+            document.getElementById('shift').value = '';
         }
         
         function submitAccessRequest() {
             const cardId = document.getElementById('pending-card-id').value;
             const firstName = document.getElementById('first-name').value.trim();
             const lastName = document.getElementById('last-name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const department = document.getElementById('department').value;
+            const shift = document.getElementById('shift').value;
             
             if (!firstName || !lastName) {
                 alert('Please enter both first and last name');
@@ -765,7 +789,10 @@
                 body: JSON.stringify({
                     card_id: cardId,
                     first_name: firstName,
-                    last_name: lastName
+                    last_name: lastName,
+                    email: email,
+                    department: department,
+                    shift: shift
                 })
             })
             .then(response => response.json())
