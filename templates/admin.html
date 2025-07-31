@@ -133,19 +133,98 @@
             background: #f8f9fa;
             margin-bottom: 10px;
             border-radius: 4px;
+            flex-direction: column;
+            align-items: stretch;
         }
         .request-info {
             flex-grow: 1;
+            margin-bottom: 10px;
+        }
+        .request-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .request-form input, .request-form select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex: 1;
         }
         .request-actions {
             display: flex;
             gap: 10px;
+            justify-content: flex-end;
         }
         .request-actions select {
             margin-right: 5px;
             padding: 5px;
             border: 1px solid #ddd;
             border-radius: 3px;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #e8f4fd;
+            border-radius: 6px;
+            border: 1px solid #b8daff;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #28a745;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        .instruction-text {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+        .instruction-text h4 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .instruction-text ol {
+            text-align: left;
+            max-width: 400px;
+            margin: 0 auto;
         }
         .logs-container {
             background: #f8f9fa;
@@ -188,6 +267,7 @@
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
             <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
+            <a href="#" class="nav-btn" onclick="showSection('management')">Shifts & Departments</a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="#" class="nav-btn" onclick="showSection('settings')">Settings</a>
@@ -200,32 +280,14 @@
             <!-- Users Section -->
             <div id="users" class="section active">
                 <div class="card">
-                    <h3>Add New User</h3>
-                    <form id="add-user-form">
-                        <div class="form-group">
-                            <label for="card_id">Card ID:</label>
-                            <input type="text" id="card_id" name="card_id" placeholder="Enter card ID" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="user_name">User Name:</label>
-                            <input type="text" id="user_name" name="user_name" placeholder="Enter user name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="access_level">Access Level:</label>
-                            <select id="access_level" name="access_level">
-                                <option value="user">User</option>
-                                <option value="manager">Manager</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="department">Department (Optional):</label>
-                            <input type="text" id="department" name="department" placeholder="Enter department">
-                        </div>
-                        <button type="submit" id="addUserBtn" class="btn success">Add User</button>
-                        <button type="button" id="updateUserBtn" class="btn" onclick="updateUser()" style="display: none; background-color: #28a745; color: white;">Update User</button>
-                        <button type="button" id="cancelEditBtn" class="btn" onclick="cancelEdit()" style="display: none; background-color: #6c757d; color: white;">Cancel</button>
-                    </form>
+                    <h3>🔍 User Management</h3>
+                    <p><strong>Note:</strong> To add new users, use the industry-standard card registration system in the "Access Requests" tab. Have users scan their cards at the main terminal to create registration requests.</p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn" onclick="loadUsers()">Refresh Users</button>
+                        <input type="text" id="search-users" placeholder="Search users..." style="margin-left: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button class="btn" onclick="searchUsers()">Search</button>
+                    </div>
                 </div>
                 
                 <div class="card">
@@ -241,12 +303,59 @@
             <!-- Access Requests Section -->
             <div id="requests" class="section">
                 <div class="card">
-                    <h3>Pending Access Requests</h3>
+                    <h3>🆔 Card Registration & Access Requests</h3>
+                    
+                    <!-- Auto Accept Toggle -->
+                    <div class="toggle-container">
+                        <label for="auto-accept-toggle">
+                            <strong>Auto Accept:</strong> Automatically grant User access to new card scans
+                        </label>
+                        <label class="toggle-switch" id="auto-accept-switch">
+                            <input type="checkbox" id="auto-accept-toggle" onchange="toggleAutoAccept()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span id="auto-accept-status" style="font-size: 12px; color: #666;">Disabled</span>
+                    </div>
+                    
                     <div style="margin-bottom: 10px;">
                         <button class="btn" onclick="loadAccessRequests()">Refresh Requests</button>
+                        <button class="btn danger" onclick="purgePendingRequests()">Purge All Requests</button>
                     </div>
                     <div id="requests-list">
                         <div>Loading requests...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Shifts and Departments Management Section -->
+            <div id="management" class="section">
+                <div class="card">
+                    <h3>🏢 Shifts & Departments Management</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Departments -->
+                        <div>
+                            <h4>Departments</h4>
+                            <div style="margin-bottom: 10px;">
+                                <input type="text" id="new-department" placeholder="New Department Name" style="margin-right: 10px; padding: 8px;">
+                                <button class="btn" onclick="addDepartment()">Add Department</button>
+                            </div>
+                            <div id="departments-list" style="border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                <div style="padding: 10px;">Loading departments...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Shifts -->
+                        <div>
+                            <h4>Shifts</h4>
+                            <div style="margin-bottom: 10px;">
+                                <input type="text" id="new-shift" placeholder="New Shift Name" style="margin-right: 10px; padding: 8px;">
+                                <button class="btn" onclick="addShift()">Add Shift</button>
+                            </div>
+                            <div id="shifts-list" style="border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                <div style="padding: 10px;">Loading shifts...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -411,6 +520,7 @@
                                         <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Name</th>
                                         <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Access Level</th>
                                         <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Department</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Shift</th>
                                         <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
                                     </tr>
                                 </thead>
@@ -421,6 +531,7 @@
                                             <td style="padding: 10px; border: 1px solid #ddd;">${user.name}</td>
                                             <td style="padding: 10px; border: 1px solid #ddd;">${user.access_level}</td>
                                             <td style="padding: 10px; border: 1px solid #ddd;">${user.department || ''}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.shift || ''}</td>
                                             <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
                                                 <button class="btn" onclick="editUser('${user.card_id}')" style="margin-right: 5px; background-color: #007bff; color: white;">Edit</button>
                                                 <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
@@ -437,6 +548,57 @@
                 .catch(error => {
                     console.error('Error loading users:', error);
                     document.getElementById('user-list').innerHTML = '<div class="user-item"><div>Error loading users</div></div>';
+                });
+        }
+        
+        function searchUsers() {
+            const searchTerm = document.getElementById('search-users').value.trim();
+            if (!searchTerm) {
+                loadUsers(); // Reload all users if search is empty
+                return;
+            }
+            
+            fetch(`/api/users/search?q=${encodeURIComponent(searchTerm)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const userList = document.getElementById('user-list');
+                    if (data.success && data.users.length > 0) {
+                        userList.innerHTML = `
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background-color: #f5f5f5;">
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Card ID</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Name</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Access Level</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Department</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Shift</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.users.map(user => `
+                                        <tr data-card-id="${user.card_id}">
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.card_id}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.name}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.access_level}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.department || ''}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.shift || ''}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                                                <button class="btn" onclick="editUser('${user.card_id}')" style="margin-right: 5px; background-color: #007bff; color: white;">Edit</button>
+                                                <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    } else {
+                        userList.innerHTML = `<div class="user-item"><div>No users found matching "${searchTerm}"</div></div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching users:', error);
+                    document.getElementById('user-list').innerHTML = '<div class="user-item"><div>Error searching users</div></div>';
                 });
         }
         
@@ -773,75 +935,106 @@
             }
         }
         
-        // Access Request Functions
+        // Access Request Functions - Industry Standard Card Registration
         function loadAccessRequests() {
-            // First get user permissions
-            fetch('/api/user-permissions')
-                .then(response => response.json())
-                .then(permData => {
-                    const permissions = permData.permissions || {};
+            Promise.all([
+                fetch('/api/pending-requests'),
+                fetch('/api/departments'),
+                fetch('/api/shifts')
+            ])
+            .then(responses => Promise.all(responses.map(r => r.json())))
+            .then(([requestsData, deptsData, shiftsData]) => {
+                const requestsList = document.getElementById('requests-list');
+                if (requestsData.success && requestsData.requests.length > 0) {
+                    const departments = deptsData.departments || [];
+                    const shifts = shiftsData.shifts || [];
                     
-                    // Then load access requests
-                    fetch('/api/access-requests')
-                        .then(response => response.json())
-                        .then(data => {
-                            const requestsList = document.getElementById('requests-list');
-                            if (data.success && data.requests.length > 0) {
-                                requestsList.innerHTML = data.requests.map(request => {
-                                    // Build access level options based on permissions
-                                    let accessLevelOptions = '';
-                                    if (permissions.can_assign_user) {
-                                        accessLevelOptions += '<option value="user">User</option>';
-                                    }
-                                    if (permissions.can_assign_manager) {
-                                        accessLevelOptions += '<option value="manager">Manager</option>';
-                                    }
-                                    if (permissions.can_assign_admin) {
-                                        accessLevelOptions += '<option value="admin">Admin</option>';
-                                    }
-                                    
-                                    return `
-                                        <div class="request-item">
-                                            <div class="request-info">
-                                                <strong>${request.name}</strong><br>
-                                                Card ID: ${request.card_id}<br>
-                                                Email: ${request.email || 'Not provided'}<br>
-                                                <small>Requested: ${new Date(request.timestamp).toLocaleString()}</small>
-                                            </div>
-                                            <div class="request-actions">
-                                                <select id="access-level-${request.card_id}">
-                                                    ${accessLevelOptions}
-                                                </select>
-                                                <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
-                                                <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('');
-                            } else {
-                                requestsList.innerHTML = '<div class="request-item"><div>No pending access requests</div></div>';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error loading access requests:', error);
-                            document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading requests</div></div>';
-                        });
+                    requestsList.innerHTML = requestsData.requests.map(request => {
+                        const hasUserInfo = request.first_name && request.last_name;
+                        const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : 'Unknown User';
+                        
+                        return `
+                            <div class="request-item">
+                                <div class="request-info">
+                                    <strong>${hasUserInfo ? 'Access Request' : 'Unknown Card Scanned'}</strong><br>
+                                    ${hasUserInfo ? `Name: <strong>${displayName}</strong><br>` : ''}
+                                    Card ID: <code>${request.card_id}</code><br>
+                                    Submitted: ${new Date(request.timestamp).toLocaleString()}<br>
+                                    ${request.department ? `Department: ${request.department}<br>` : ''}
+                                    ${request.shift ? `Shift: ${request.shift}<br>` : ''}
+                                    <small>Status: Pending Approval${hasUserInfo ? ' - User Info Provided' : ' - Awaiting User Info'}</small>
+                                </div>
+                                <div class="request-form">
+                                    <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" ${hasUserInfo ? 'readonly' : ''} required>
+                                    <select id="dept-${request.card_id}">
+                                        <option value="">Select Department</option>
+                                        ${departments.map(dept => `<option value="${dept}" ${dept === request.department ? 'selected' : ''}>${dept}</option>`).join('')}
+                                    </select>
+                                    <select id="shift-${request.card_id}">
+                                        <option value="">Select Shift</option>
+                                        ${shifts.map(shift => `<option value="${shift}" ${shift === request.shift ? 'selected' : ''}>${shift}</option>`).join('')}
+                                    </select>
+                                    <select id="level-${request.card_id}">
+                                        <option value="user">User Access</option>
+                                        <option value="manager">Manager Access</option>
+                                        <option value="admin">Admin Access</option>
+                                    </select>
+                                </div>
+                                <div class="request-actions">
+                                    <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
+                                    <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    } else {
+                        requestsList.innerHTML = `
+                            <div class="request-item">
+                                <div class="instruction-text">
+                                    <h4>📱 Card Registration Instructions</h4>
+                                    <p>To register a new user:</p>
+                                    <ol>
+                                        <li>Have the person scan their badge at the main terminal</li>
+                                        <li>Unknown cards will appear here for approval</li>
+                                        <li>Admin can edit name, department, shift and access level</li>
+                                        <li>Click "Approve" to grant access</li>
+                                    </ol>
+                                    <p><em>No pending requests at this time.</em></p>
+                                </div>
+                            </div>
+                        `;
+                    }
                 })
                 .catch(error => {
-                    console.error('Error loading permissions:', error);
-                    document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading permissions</div></div>';
+                    console.error('Error loading access requests:', error);
+                    document.getElementById('requests-list').innerHTML = '<div class="request-item"><div>Error loading requests</div></div>';
                 });
         }
         
         function approveRequest(cardId) {
-            const accessLevel = document.getElementById(`access-level-${cardId}`).value;
+            // Get form data
+            const name = document.getElementById('name-' + cardId).value.trim();
+            const department = document.getElementById('dept-' + cardId).value.trim();
+            const shift = document.getElementById('shift-' + cardId).value.trim();
+            const accessLevel = document.getElementById('level-' + cardId).value;
             
-            fetch(`/api/access-requests/${cardId}`, {
+            if (!name) {
+                alert('Please enter a name for this user');
+                return;
+            }
+            
+            fetch('/api/approve-request', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ access_level: accessLevel })
+                body: JSON.stringify({ 
+                    card_id: cardId,
+                    name: name,
+                    department: department,
+                    shift: shift,
+                    access_level: accessLevel 
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -861,8 +1054,12 @@
         
         function denyRequest(cardId) {
             if (confirm('Are you sure you want to deny this access request?')) {
-                fetch(`/api/access-requests/${cardId}`, {
-                    method: 'DELETE'
+                fetch('/api/deny-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ card_id: cardId })
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -880,8 +1077,234 @@
             }
         }
         
+        function toggleAutoAccept() {
+            const toggle = document.getElementById('auto-accept-toggle');
+            const status = document.getElementById('auto-accept-status');
+            
+            fetch('/api/toggle-auto-accept', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled: toggle.checked })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    status.textContent = toggle.checked ? 'Enabled' : 'Disabled';
+                    status.style.color = toggle.checked ? '#28a745' : '#666';
+                } else {
+                    alert('Error updating auto-accept setting');
+                    toggle.checked = !toggle.checked; // Revert on error
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling auto-accept:', error);
+                alert('Error updating auto-accept setting');
+                toggle.checked = !toggle.checked; // Revert on error
+            });
+        }
+        
+        // Shifts and Departments Management Functions
+        function loadDepartments() {
+            fetch('/api/departments')
+                .then(response => response.json())
+                .then(data => {
+                    const deptsList = document.getElementById('departments-list');
+                    if (data.success && data.departments.length > 0) {
+                        deptsList.innerHTML = data.departments.map(dept => 
+                            '<div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">' +
+                                '<span>' + dept + '</span>' +
+                                '<button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="removeDepartment(\'' + dept + '\')">Remove</button>' +
+                            '</div>'
+                        ).join('');
+                    } else {
+                        deptsList.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No departments found</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading departments:', error);
+                    document.getElementById('departments-list').innerHTML = '<div style="padding: 10px; color: red;">Error loading departments</div>';
+                });
+        }
+        
+        function loadShifts() {
+            fetch('/api/shifts')
+                .then(response => response.json())
+                .then(data => {
+                    const shiftsList = document.getElementById('shifts-list');
+                    if (data.success && data.shifts.length > 0) {
+                        shiftsList.innerHTML = data.shifts.map(shift => 
+                            '<div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">' +
+                                '<span>' + shift + '</span>' +
+                                '<button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="removeShift(\'' + shift + '\')">Remove</button>' +
+                            '</div>'
+                        ).join('');
+                    } else {
+                        shiftsList.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No shifts found</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading shifts:', error);
+                    document.getElementById('shifts-list').innerHTML = '<div style="padding: 10px; color: red;">Error loading shifts</div>';
+                });
+        }
+        
+        function addDepartment() {
+            const deptName = document.getElementById('new-department').value.trim();
+            if (!deptName) {
+                alert('Please enter a department name');
+                return;
+            }
+            
+            fetch('/api/departments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: deptName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('new-department').value = '';
+                    loadDepartments();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error adding department:', error);
+                alert('Error adding department');
+            });
+        }
+        
+        function addShift() {
+            const shiftName = document.getElementById('new-shift').value.trim();
+            if (!shiftName) {
+                alert('Please enter a shift name');
+                return;
+            }
+            
+            fetch('/api/shifts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: shiftName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('new-shift').value = '';
+                    loadShifts();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error adding shift:', error);
+                alert('Error adding shift');
+            });
+        }
+        
+        function removeDepartment(deptName) {
+            if (confirm('Are you sure you want to remove the department "' + deptName + '"?')) {
+                fetch('/api/departments/' + encodeURIComponent(deptName), {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadDepartments();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error removing department:', error);
+                    alert('Error removing department');
+                });
+            }
+        }
+        
+        function removeShift(shiftName) {
+            if (confirm('Are you sure you want to remove the shift "' + shiftName + '"?')) {
+                fetch('/api/shifts/' + encodeURIComponent(shiftName), {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadShifts();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error removing shift:', error);
+                    alert('Error removing shift');
+                });
+            }
+        }
+        
         // Load initial data
         loadUsers();
+        loadDepartments();
+        loadShifts();
+        
+        // Password form submission handler
+        document.getElementById('password-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const passwordData = {
+                role: formData.get('role'),
+                password: formData.get('password')
+            };
+            
+            fetch('/api/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(passwordData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Password changed successfully');
+                    e.target.reset();
+                } else {
+                    alert('Error changing password: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error changing password: ' + error.message);
+            });
+        });
+        
+        // Purge pending requests function
+        function purgePendingRequests() {
+            if (confirm('Are you sure you want to purge ALL pending access requests? This cannot be undone.')) {
+                fetch('/api/purge-pending-requests', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        loadAccessRequests();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error purging pending requests:', error);
+                    alert('Error purging pending requests');
+                });
+            }
+        }
     </script>
 </body>
 </html>

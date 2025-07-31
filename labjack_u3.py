@@ -238,8 +238,10 @@ class LabJackU3:
                 self.stable_input_readings[channel] = stable_state
                 states[channel] = stable_state
 
-                # Add detailed logging for debugging
-                logger.info(f"Channel {channel}: Readings={readings}, StableState={stable_state}, FloatingInputsAsLow={self.floating_inputs_as_low}")
+                # Only log when state actually changes from last known state
+                last_state = self.last_input_states.get(channel, None)
+                if last_state is None or last_state != stable_state:
+                    logger.info(f"Channel {channel}: State changed to {stable_state}")
 
             return states
 
@@ -427,14 +429,7 @@ class LabJackU3:
                         if self.on_input_change:
                             self.on_input_change(change_data)
                 
-                # Continuously monitor the states of FIO4 and FIO5
-                while True:
-                    fio4_state = self.device.getDIState(4)  # Get digital input state for FIO4
-                    fio5_state = self.device.getDIState(5)  # Get digital input state for FIO5
-                    logger.info(f"FIO4 state: {fio4_state}, FIO5 state: {fio5_state}")
-                    time.sleep(1)  # Log every second
-                
-                time.sleep(0.1)  # 100ms polling rate
+                time.sleep(0.5)  # 500ms polling rate - reduced frequency
                 
             except Exception as e:
                 logger.error(f"Error in LabJack U3 monitor loop: {e}")

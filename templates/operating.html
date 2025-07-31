@@ -204,6 +204,16 @@
             background: rgba(220, 53, 69, 0.9);
         }
         
+        .admin-panel button.access-btn {
+            background: rgba(40, 167, 69, 0.7);
+            border-color: rgba(40, 167, 69, 0.9);
+            margin: 0 10px;
+        }
+        
+        .admin-panel button.access-btn:hover {
+            background: rgba(40, 167, 69, 0.9);
+        }
+        
         /* Main content container */
         .container {
             flex: 1;
@@ -378,6 +388,35 @@
         </div>
     </div>
 
+    <!-- Access request modal -->
+    <div id="access-request-modal" class="admin-panel" style="display: none;">
+        <div class="admin-panel-content">
+            <h3>🔐 Access Request</h3>
+            <p>Unauthorized card detected. Would you like to request access?</p>
+            <div style="text-align: center; margin: 20px 0;">
+                <button onclick="showAccessRequestForm()" class="access-btn">Request Access</button>
+                <button class="cancel" onclick="hideAccessRequestModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Access request form modal -->
+    <div id="access-request-form" class="admin-panel" style="display: none;">
+        <div class="admin-panel-content">
+            <h3>👤 Access Request Form</h3>
+            <p>Please enter your information:</p>
+            <div style="margin: 15px 0;">
+                <input type="text" id="first-name" placeholder="First Name" required>
+                <input type="text" id="last-name" placeholder="Last Name" required>
+            </div>
+            <div style="text-align: center; margin: 20px 0;">
+                <button onclick="submitAccessRequest()" class="access-btn">Submit Request</button>
+                <button class="cancel" onclick="hideAccessRequestForm()">Cancel</button>
+            </div>
+            <input type="hidden" id="pending-card-id">
+        </div>
+    </div>
+
     <script>
         // Authentication state management
         let isAdminLoggedIn = false;
@@ -539,7 +578,7 @@
                 if (!adminPanel || adminPanel.style.display === 'none') {
                     window.location.reload();
                 }
-            }, 5000);
+            }, 30000); // Refresh every 30 seconds instead of 5
         }
         
         function adminLogin() {
@@ -582,19 +621,84 @@
             });
         });
 
-        // Auto-check status every 2 seconds
+        // Check status infrequently - only for critical system health monitoring
         let statusCheckInterval = setInterval(() => {
             // Only check status if admin panel is not open
             const adminPanel = document.getElementById('admin-panel');
             if (!adminPanel || adminPanel.style.display === 'none') {
+                // Only check auth status and shear status - no card scan checking here
                 checkAuthStatus();
                 checkShearStatus();
+                // Card scanning is handled by event-driven checkForNewCardScan() 
             }
-        }, 2000); // Check every 2 seconds
+        }, 30000); // Check every 30 seconds for basic system health only
+        
+        // Separate interval for card scanning - more frequent but lightweight
+        let cardScanInterval = setInterval(() => {
+            const adminPanel = document.getElementById('admin-panel');
+            if (!adminPanel || adminPanel.style.display === 'none') {
+                checkForNewCardScan(); // Only check for new card scans
+            }
+        }, 2000); // Check for card scans every 2 seconds
+        
+        // Track last known card to detect new scans
+        let lastKnownCard = null;
+        
+        // Check for new card scans and handle accordingly
+        function checkForNewCardScan() {
+            fetch('/api/last-card-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.card_id && data.card_id !== lastKnownCard) {
+                        lastKnownCard = data.card_id;
+                        handleCardScanResult(data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking card status:', error);
+                });
+        }
+        
+        // Handle card scan results based on status
+        function handleCardScanResult(data) {
+            console.log('Card scan result:', data);
+            
+            switch(data.status) {
+                case 'info_required':
+                    // Unknown card that needs user info
+                    showAccessRequestModal(data.card_id);
+                    break;
+                case 'authorization_pending':
+                    // User has provided info, waiting for admin approval
+                    showMessage(`Authorization pending for ${data.user_name || 'user'} - Admin approval required`);
+                    break;
+                case 'authorized':
+                    // User authorized and logged in
+                    showMessage(`Welcome ${data.user_name || 'User'} - Access granted`);
+                    break;
+                case 'access_denied':
+                    // Known user but access denied
+                    showMessage(`Access denied: ${data.message}`);
+                    break;
+                case 'unknown':
+                    // Unknown card
+                    showAccessRequestModal(data.card_id);
+                    break;
+                default:
+                    console.log('No action needed for card status:', data.status);
+            }
+        }
+        
+        // Show temporary message to user
+        function showMessage(message) {
+            console.log('Message:', message);
+            // You could add a toast notification or status display here
+        }
         
         // Stop status checks when admin panel opens
         function showAdminAccess() {
             clearInterval(statusCheckInterval);
+            clearInterval(cardScanInterval);
             document.getElementById('admin-panel').style.display = 'flex';
             document.getElementById('admin-password').focus();
         }
@@ -609,11 +713,92 @@
                 if (!adminPanel || adminPanel.style.display === 'none') {
                     checkAuthStatus();
                     checkShearStatus();
+                    // Card scanning is event-driven, no need to poll here
                 }
-            }, 2000);
+            }, 30000); // Check every 30 seconds for system health only
+            
+            // Resume card scan checking
+            cardScanInterval = setInterval(() => {
+                const adminPanel = document.getElementById('admin-panel');
+                if (!adminPanel || adminPanel.style.display === 'none') {
+                    checkForNewCardScan();
+                }
+            }, 2000); // Check for card scans every 2 seconds
         }
         
-        // Initialize page
+        // Access Request Functions
+        function showAccessRequestModal(cardId) {
+            document.getElementById('access-request-modal').style.display = 'flex';
+            document.getElementById('pending-card-id').value = cardId;
+        }
+        
+        function hideAccessRequestModal() {
+            document.getElementById('access-request-modal').style.display = 'none';
+        }
+        
+        function showAccessRequestForm() {
+            document.getElementById('access-request-modal').style.display = 'none';
+            document.getElementById('access-request-form').style.display = 'flex';
+        }
+        
+        function hideAccessRequestForm() {
+            document.getElementById('access-request-form').style.display = 'none';
+            document.getElementById('first-name').value = '';
+            document.getElementById('last-name').value = '';
+        }
+        
+        function submitAccessRequest() {
+            const cardId = document.getElementById('pending-card-id').value;
+            const firstName = document.getElementById('first-name').value.trim();
+            const lastName = document.getElementById('last-name').value.trim();
+            
+            if (!firstName || !lastName) {
+                alert('Please enter both first and last name');
+                return;
+            }
+            
+            fetch('/api/submit-access-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    card_id: cardId,
+                    first_name: firstName,
+                    last_name: lastName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Access request submitted successfully! Please wait for approval from management.');
+                    hideAccessRequestForm();
+                } else {
+                    alert('Error submitting request: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting access request:', error);
+                alert('Error submitting access request');
+            });
+        }
+        
+        // Check for pending access requests for a specific card
+        function checkForPendingRequests(cardId) {
+            if (!cardId) return;
+            
+            fetch('/api/check-pending-request/' + cardId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.has_pending) {
+                        console.log('Showing access request modal for card:', cardId);
+                        showAccessRequestModal(cardId);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking pending request:', error);
+                });
+        }        // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             // Check authentication status on page load
             checkAuthStatus();

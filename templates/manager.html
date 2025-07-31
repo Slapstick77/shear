@@ -121,9 +121,7 @@
             border-bottom: 1px solid #eee;
         }
         .request-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: block;
             padding: 15px;
             border-bottom: 1px solid #eee;
             background: #f8f9fa;
@@ -131,11 +129,39 @@
             border-radius: 4px;
         }
         .request-info {
-            flex-grow: 1;
+            margin-bottom: 10px;
+        }
+        .request-form {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .request-form input, .request-form select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex: 1;
+            min-width: 150px;
         }
         .request-actions {
             display: flex;
             gap: 10px;
+            margin-top: 10px;
+        }
+        .instruction-text {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+        .instruction-text h4 {
+            color: #28a745;
+            margin-bottom: 15px;
+        }
+        .instruction-text ol {
+            text-align: left;
+            max-width: 500px;
+            margin: 0 auto;
         }
         .logs-container {
             background: #f8f9fa;
@@ -285,12 +311,12 @@
             <!-- Access Requests Section -->
             <div id="requests" class="section">
                 <div class="card">
-                    <h3>Pending Access Requests</h3>
+                    <h3>🆔 Card Registration & Access Requests</h3>
                     
                     <!-- Auto Accept Toggle -->
                     <div class="toggle-container">
                         <label for="auto-accept-toggle">
-                            <strong>Auto Accept:</strong> Automatically grant User access to new requests
+                            <strong>Auto Accept:</strong> Automatically grant User access to new card scans
                         </label>
                         <label class="toggle-switch" id="auto-accept-switch">
                             <input type="checkbox" id="auto-accept-toggle" onchange="toggleAutoAccept()">
@@ -340,6 +366,9 @@
     </div>
 
     <script>
+        // Get user role from session (this should be set by the server)
+        let userRole = '{{ session.get("role", "manager") }}';
+        
         function showSection(sectionName) {
             // Hide all sections
             document.querySelectorAll('.section').forEach(section => {
@@ -484,30 +513,61 @@
             window.open('/api/usage-report/download', '_blank');
         }
         
-        // Access Request Functions (Manager can only approve as 'user')
+        // Access Request Functions - Industry Standard Card Registration
         function loadAccessRequests() {
-            fetch('/api/access-requests')
+            fetch('/api/pending-requests')
                 .then(response => response.json())
                 .then(data => {
                     const requestsList = document.getElementById('requests-list');
                     if (data.success && data.requests.length > 0) {
-                        requestsList.innerHTML = data.requests.map(request => `
+                        requestsList.innerHTML = data.requests.map(request => {
+                            const hasUserInfo = request.first_name && request.last_name;
+                            const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : 'Unknown User';
+                            
+                            return `
                             <div class="request-item">
                                 <div class="request-info">
-                                    <strong>${request.name}</strong><br>
-                                    Card ID: ${request.card_id}<br>
-                                    Email: ${request.email || 'Not provided'}<br>
-                                    <small>Requested: ${new Date(request.timestamp).toLocaleString()}</small><br>
-                                    <em>Note: Managers can only approve as 'User' access level</em>
+                                    <strong>${hasUserInfo ? 'Access Request' : 'Unknown Card Scanned'}</strong><br>
+                                    ${hasUserInfo ? `Name: <strong>${displayName}</strong><br>` : ''}
+                                    Card ID: <code>${request.card_id}</code><br>
+                                    Submitted: ${new Date(request.timestamp).toLocaleString()}<br>
+                                    ${request.department ? `Department: ${request.department}<br>` : ''}
+                                    ${request.shift ? `Shift: ${request.shift}<br>` : ''}
+                                    <small>Status: Pending Approval</small>
+                                </div>
+                                <div class="request-form">
+                                    <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" ${hasUserInfo ? 'readonly' : ''} required>
+                                    <input type="text" id="dept-${request.card_id}" placeholder="Department (optional)" value="${request.department || ''}">
+                                    <select id="level-${request.card_id}">
+                                        <option value="user">User Access</option>
+                                        ${userRole === 'admin' ? '<option value="manager">Manager Access</option>' : ''}
+                                        ${userRole === 'admin' ? '<option value="admin">Admin Access</option>' : ''}
+                                    </select>
                                 </div>
                                 <div class="request-actions">
-                                    <button class="btn" onclick="approveRequest('${request.card_id}')">Approve as User</button>
+                                    <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
                                     <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
                                 </div>
                             </div>
-                        `).join('');
+                            `;
+                        }).join('');
                     } else {
-                        requestsList.innerHTML = '<div class="request-item"><div>No pending access requests</div></div>';
+                        requestsList.innerHTML = `
+                            <div class="request-item">
+                                <div class="instruction-text">
+                                    <h4>📱 Card Registration Instructions</h4>
+                                    <p>To register a new user:</p>
+                                    <ol>
+                                        <li>Have the person scan their badge at the main terminal</li>
+                                        <li>Unknown cards will appear here for approval</li>
+                                        <li>Enter their name and department</li>
+                                        <li>Select appropriate access level</li>
+                                        <li>Click "Approve" to grant access</li>
+                                    </ol>
+                                    <p><em>No pending requests at this time.</em></p>
+                                </div>
+                            </div>
+                        `;
                     }
                 })
                 .catch(error => {
@@ -517,13 +577,27 @@
         }
         
         function approveRequest(cardId) {
-            // Managers can only approve as 'user' level
-            fetch(`/api/access-requests/${cardId}`, {
+            // Get form data
+            const name = document.getElementById(`name-${cardId}`).value.trim();
+            const department = document.getElementById(`dept-${cardId}`).value.trim();
+            const accessLevel = document.getElementById(`level-${cardId}`).value;
+            
+            if (!name) {
+                alert('Please enter a name for this user');
+                return;
+            }
+            
+            fetch('/api/approve-request', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ access_level: 'user' })
+                body: JSON.stringify({ 
+                    card_id: cardId,
+                    name: name,
+                    department: department,
+                    access_level: accessLevel 
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -543,8 +617,12 @@
         
         function denyRequest(cardId) {
             if (confirm('Are you sure you want to deny this access request?')) {
-                fetch(`/api/access-requests/${cardId}`, {
-                    method: 'DELETE'
+                fetch('/api/deny-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ card_id: cardId })
                 })
                 .then(response => response.json())
                 .then(data => {
