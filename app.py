@@ -4,10 +4,11 @@ Shear App - USB HID Card Access Server
 Handles card reader events and controls access to shear equipment
 """
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file, Response
 import threading
 import requests
 import json
+import time
 import logging
 from datetime import datetime
 import os
@@ -48,6 +49,7 @@ SHEAR_SETTINGS = {
 # Session data
 session_logs = []
 last_card_read = None
+card_scan_events = []  # Queue for card scan events to push to frontend
 shear_unlock_timer = None
 shear_unlocked = False
 shear_unlock_timestamp = None
@@ -56,8 +58,8 @@ pending_requests = []  # Store pending access requests
 auto_accept_enabled = False  # Auto-accept setting for new card registrations
 
 # System data for shifts and departments
-system_shifts = ["Day Shift", "Night Shift", "Weekend"]
-system_departments = ["Production", "Maintenance", "Quality", "Engineering", "Administration"]
+system_shifts = ["First", "Second", "Third"]
+system_departments = ["Sheet Shop", "Base Shop", "Electric Shop", "Assembly", "Door Shop", "QA", "Maintenance", "Management", "Engineering", "Other"]
 
 # Add datetime filter for Jinja2 templates
 @app.template_filter('datetime')
@@ -118,15 +120,26 @@ def handle_card_read(card_data):
         
         # STEP 2: Check if card is in users table
         user = db.get_user(card_id)
-        if user and user['active']:
-            # User exists and is active - unlock shear
+        if user:
+            # User exists - unlock shear
             unlock_shear(card_id, user)
             
             # Update last access time
             db.update_user_last_access(card_id)
             
             # Log the unlock event
-            db.log_scan_event(card_id, 'unlock', user['name'], 'success', 'Shear unlocked')
+            db.log_scan_event(card_id, 'unlock')
+            
+            # Push event to frontend
+            event = {
+                'type': 'card_scan',
+                'card_id': card_id,
+                'status': 'authorized',
+                'user_name': user['name'],
+                'message': 'Access granted'
+            }
+            card_scan_events.append(event)
+            logger.info(f"Pushed authorized event to SSE queue: {event}")
             
             # Add to session logs for UI
             log_entry = {
@@ -135,23 +148,21 @@ def handle_card_read(card_data):
             }
             session_logs.append(log_entry)
             
-        elif user and not user['active']:
-            # User exists but is inactive
-            db.log_scan_event(card_id, 'denied', user['name'], 'inactive', 'User account is inactive')
-            
-            log_entry = {
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'message': f"Access denied for {user['name']} (card: {card_id}) - Account inactive"
-            }
-            session_logs.append(log_entry)
-            
         else:
             # STEP 3: Check if card has pending request
             pending_request = db.get_pending_request(card_id)
             if pending_request:
                 # Card has pending request
-                db.log_scan_event(card_id, 'pending', f"{pending_request['first_name']} {pending_request['last_name']}", 
-                                'waiting', 'Request pending admin approval')
+                db.log_scan_event(card_id, 'pending')
+                
+                # Push event to frontend
+                card_scan_events.append({
+                    'type': 'card_scan',
+                    'card_id': card_id,
+                    'status': 'authorization_pending',
+                    'user_name': f"{pending_request['first_name']} {pending_request['last_name']}",
+                    'message': 'Admin approval required'
+                })
                 
                 log_entry = {
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -161,7 +172,18 @@ def handle_card_read(card_data):
                 
             else:
                 # STEP 4: Unknown card - log and trigger UI prompt
-                db.log_scan_event(card_id, 'unknown', None, 'prompt', 'Unknown card - awaiting user input')
+                db.log_scan_event(card_id, 'unknown')
+                
+                # Push event to frontend
+                event = {
+                    'type': 'card_scan',
+                    'card_id': card_id,
+                    'status': 'unknown',
+                    'user_name': None,
+                    'message': 'Unknown card'
+                }
+                card_scan_events.append(event)
+                logger.info(f"Pushed unknown card event to SSE queue: {event}")
                 
                 log_entry = {
                     'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -175,7 +197,7 @@ def handle_card_read(card_data):
         
     except Exception as e:
         logger.error(f"Error handling card read: {e}")
-        db.log_scan_event(card_id, 'error', None, 'error', f"System error: {str(e)}")
+        db.log_scan_event(card_id, 'error')
 
 def unlock_shear(card_id, user_info=None):
     """Unlock shear and start monitoring"""
@@ -282,8 +304,32 @@ def handle_labjack_input_change(change_data):
 
 @app.route('/')
 def index():
-    """Main operating page"""
+    """Smart routing based on device type"""
+    user_agent = request.headers.get('User-Agent', '').lower()
+    
+    # Enhanced device detection
+    is_mobile_phone = any(keyword in user_agent for keyword in [
+        'android.*mobile', 'iphone', 'ipod', 'blackberry', 'iemobile', 'opera mini'
+    ])
+    is_tablet = any(keyword in user_agent for keyword in [
+        'ipad', 'android tablet', 'tablet'
+    ]) or ('android' in user_agent and 'mobile' not in user_agent)
+    
+    # Route tablets to full operating dashboard, desktops to simple status page
+    if is_tablet or is_mobile_phone:
+        return render_template('operating.html')
+    else:
+        return redirect(url_for('desktop_status'))
+
+@app.route('/operating')
+def operating():
+    """Full operating dashboard (for tablets/mobile)"""
     return render_template('operating.html')
+
+@app.route('/desktop')
+def desktop_status():
+    """Simple desktop status display (no SSE conflicts)"""
+    return render_template('desktop_status.html')
 
 @app.route('/technical')
 def technical():
@@ -406,24 +452,33 @@ def api_user_permissions():
         user_role = session.get('user_role')
         login_method = session.get('login_method', 'card')
         
-        # Emergency admin (password login) can assign any role
-        # Card-based manager can only assign user role
-        # Card-based admin can assign any role
-        
+        # Define permissions based on role
         permissions = {
             'can_assign_admin': False,
             'can_assign_manager': False,
             'can_assign_user': False,
+            'can_edit_all_users': False,
+            'can_remove_all_users': False,
+            'can_approve_requests': False,
             'user_role': user_role,
             'login_method': login_method
         }
         
         if user_role == 'admin':
+            # Admin can do everything
             permissions['can_assign_admin'] = True
             permissions['can_assign_manager'] = True
             permissions['can_assign_user'] = True
+            permissions['can_edit_all_users'] = True
+            permissions['can_remove_all_users'] = True
+            permissions['can_approve_requests'] = True
+            
         elif user_role == 'manager':
+            # Manager can assign user level only, edit users, and approve user-level requests
             permissions['can_assign_user'] = True
+            permissions['can_edit_all_users'] = True  # Can edit, but restricted in access_level assignment
+            permissions['can_remove_all_users'] = False  # Cannot remove admin/manager users
+            permissions['can_approve_requests'] = True  # Can approve but only assign user level
         
         return jsonify({'success': True, 'permissions': permissions})
         
@@ -584,17 +639,15 @@ def api_approve_access_request(card_id):
         # Create full name
         full_name = f"{pending_request['first_name']} {pending_request['last_name']}"
         
-        # Add user to database
-        success = db.add_user(card_id, full_name, department, shift, access_level, 
-                             f"Approved on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        # Add user to database (note: department from request data, not from pending_request)
+        success = db.add_user(card_id, full_name, access_level, department, 'active')
         
         if success:
             # Remove from pending requests
             db.remove_pending_request(card_id)
             
             # Log the approval
-            db.log_scan_event(card_id, 'approved', full_name, 'success', 
-                             f"User approved with {access_level} access")
+            db.log_scan_event(card_id, 'approved')
             
             logger.info(f"Approved access for card {card_id} - {full_name} as {access_level}")
             return jsonify({'success': True, 'message': f'Access approved for {full_name}'})
@@ -620,7 +673,7 @@ def api_deny_access_request(card_id):
             full_name = f"{pending_request['first_name']} {pending_request['last_name']}"
             
             # Log the denial
-            db.log_scan_event(card_id, 'denied', full_name, 'rejected', 'Access request denied by admin')
+            db.log_scan_event(card_id, 'denied')
             
             logger.info(f"Access request denied for card {card_id} - {full_name}")
             return jsonify({'success': True, 'message': 'Access request denied'})
@@ -686,6 +739,11 @@ def api_add_user():
 def api_update_user(card_id):
     """Update an existing user"""
     try:
+        # Check authentication and permissions
+        user_role = session.get('user_role')
+        if user_role not in ['admin', 'manager']:
+            return jsonify({'success': False, 'message': 'Insufficient permissions'}), 403
+        
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'message': 'No data provided'}), 400
@@ -702,9 +760,14 @@ def api_update_user(card_id):
         if not existing_user:
             return jsonify({'success': False, 'message': 'Card not found'}), 404
         
+        # Permission check: managers can only assign user access level
+        if user_role == 'manager' and access_level not in ['user']:
+            return jsonify({'success': False, 'message': 'Managers can only assign user access level'}), 403
+        
         # Update the user
         success = db.update_user(card_id, user_name, access_level, department, existing_user['status'])
         if success:
+            logger.info(f"User {card_id} updated by {user_role}: {user_name} - {access_level} - {department}")
             return jsonify({'success': True, 'message': f'User {user_name} updated successfully'})
         else:
             return jsonify({'success': False, 'message': 'Failed to update user'}), 500
@@ -717,13 +780,23 @@ def api_update_user(card_id):
 def api_remove_user(card_id):
     """Remove a user"""
     try:
+        # Check authentication and permissions
+        user_role = session.get('user_role')
+        if user_role not in ['admin', 'manager']:
+            return jsonify({'success': False, 'message': 'Insufficient permissions'}), 403
+        
         # Check if user exists
         existing_user = db.get_user(card_id)
         if not existing_user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
         
+        # Additional permission check: managers cannot remove admin/manager users
+        if user_role == 'manager' and existing_user['access_level'] in ['admin', 'manager']:
+            return jsonify({'success': False, 'message': 'Managers cannot remove admin or manager users'}), 403
+        
         success = db.remove_user(card_id)
         if success:
+            logger.info(f"User {card_id} ({existing_user['name']}) removed by {user_role}")
             return jsonify({'success': True, 'message': f'User removed successfully'})
         else:
             return jsonify({'success': False, 'message': 'Failed to remove user'}), 500
@@ -1068,6 +1141,65 @@ def api_emergency_unlock():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/authorized-unlock', methods=['POST'])
+def api_authorized_unlock():
+    """Unlock shear for authorized user"""
+    global shear_unlocked
+    try:
+        data = request.get_json() or {}
+        card_id = data.get('card_id', 'Unknown')
+        user_name = data.get('user_name', 'Unknown User')
+        
+        # Trigger the unlock sequence
+        unlock_shear(card_id, {'name': user_name})
+        
+        # Log the authorized access
+        log_entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'message': f'AUTHORIZED ACCESS: {user_name} (Card: {card_id})'
+        }
+        session_logs.append(log_entry)
+        
+        logger.info(f"Authorized unlock for user: {user_name} (Card: {card_id})")
+        return jsonify({'success': True, 'message': f'Access granted to {user_name}'})
+            
+    except Exception as e:
+        logger.error(f"Error in authorized unlock: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/card-events')
+def card_events():
+    """Server-Sent Events stream for card scan events"""
+    def event_stream():
+        last_heartbeat = time.time()
+        while True:
+            try:
+                # Check for new card scan events
+                if card_scan_events:
+                    event = card_scan_events.pop(0)
+                    logger.info(f"SSE sending event: {event}")
+                    yield f"data: {json.dumps(event)}\n\n"
+                    last_heartbeat = time.time()
+                else:
+                    # Send heartbeat every 30 seconds to keep connection alive
+                    if time.time() - last_heartbeat > 30:
+                        yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                        last_heartbeat = time.time()
+                time.sleep(0.5)  # Check every 500ms for events
+            except GeneratorExit:
+                break
+            except Exception as e:
+                logger.error(f"Error in SSE stream: {e}")
+                break
+    
+    return Response(event_stream(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control',
+        'X-Accel-Buffering': 'no'  # Disable nginx buffering
+    })
+
 @app.route('/api/database/backup')
 def api_backup_database():
     """Backup database (admin only)"""
@@ -1148,13 +1280,16 @@ def manual_lock():
 @app.route('/api/pending-requests', methods=['GET'])
 def get_pending_requests():
     """Get all pending access requests"""
-    global pending_requests
-    return jsonify({'success': True, 'requests': pending_requests})
+    try:
+        requests = db.get_all_pending_requests()
+        return jsonify({'success': True, 'requests': requests})
+    except Exception as e:
+        logger.error(f"Error getting pending requests: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/approve-request', methods=['POST'])
 def approve_request():
     """Approve a pending access request"""
-    global pending_requests
     try:
         data = request.get_json()
         card_id = data.get('card_id')
@@ -1183,7 +1318,6 @@ def approve_request():
 @app.route('/api/deny-request', methods=['POST'])
 def deny_request():
     """Deny a pending access request"""
-    global pending_requests
     try:
         data = request.get_json()
         card_id = data.get('card_id')
@@ -1192,9 +1326,12 @@ def deny_request():
             return jsonify({'success': False, 'message': 'Card ID is required'}), 400
         
         # Remove from pending requests
-        pending_requests = [req for req in pending_requests if req['card_id'] != card_id]
-        logger.info(f"Denied access for card {card_id}")
-        return jsonify({'success': True, 'message': 'Access request denied'})
+        success = db.remove_pending_request(card_id)
+        if success:
+            logger.info(f"Denied access for card {card_id}")
+            return jsonify({'success': True, 'message': 'Access request denied'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to remove pending request'}), 500
         
     except Exception as e:
         logger.error(f"Error denying request: {e}")
@@ -1208,7 +1345,6 @@ def submit_access_request():
         card_id = data.get('card_id')
         first_name = data.get('first_name', '').strip()
         last_name = data.get('last_name', '').strip()
-        email = data.get('email', '').strip()
         department = data.get('department', '').strip()
         shift = data.get('shift', '').strip()
         
@@ -1227,11 +1363,11 @@ def submit_access_request():
             full_name = f"{first_name} {last_name}".strip()
             success = db.remove_pending_request(card_id)
             if success:
-                success = db.add_pending_request(card_id, full_name, first_name, last_name, email, department, shift)
+                success = db.add_pending_request(card_id, full_name, first_name, last_name, '', department, shift)
         else:
             # Create new pending request
             full_name = f"{first_name} {last_name}".strip()
-            success = db.add_pending_request(card_id, full_name, first_name, last_name, email, department, shift)
+            success = db.add_pending_request(card_id, full_name, first_name, last_name, '', department, shift)
         
         if success:
             logger.info(f"User {first_name} {last_name} submitted access request for card {card_id}")
@@ -1246,11 +1382,17 @@ def submit_access_request():
 @app.route('/api/check-pending-request/<card_id>')
 def check_pending_request(card_id):
     """Check if a card has a pending request that needs user info"""
-    global pending_requests
     try:
-        for pending_req in pending_requests:
-            if pending_req['card_id'] == card_id and not pending_req.get('user_requested', False):
-                return jsonify({'success': True, 'has_pending': True, 'card_id': card_id})
+        pending_request = db.get_pending_request(card_id)
+        if pending_request:
+            # Check if user info has been provided (first_name and last_name exist)
+            has_user_info = bool(pending_request.get('first_name') and pending_request.get('last_name'))
+            return jsonify({
+                'success': True, 
+                'has_pending': True, 
+                'card_id': card_id,
+                'user_info_provided': has_user_info
+            })
         
         return jsonify({'success': True, 'has_pending': False})
         
@@ -1261,10 +1403,8 @@ def check_pending_request(card_id):
 @app.route('/api/purge-pending-requests', methods=['POST'])
 def purge_pending_requests():
     """Purge all pending requests"""
-    global pending_requests
     try:
-        count = len(pending_requests)
-        pending_requests = []
+        count = db.remove_all_pending_requests()
         logger.info(f"Purged {count} pending requests")
         return jsonify({'success': True, 'message': f'Purged {count} pending requests'})
         
@@ -1288,9 +1428,9 @@ def toggle_auto_accept():
         logger.error(f"Error toggling auto-accept: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/api/card-events', methods=['GET'])
-def get_card_events():
-    """Get recent card events (from log or database)"""
+@app.route('/api/card-events-history', methods=['GET'])
+def get_card_events_history():
+    """Get recent card events history (from log or database)"""
     # This would typically read from a database or log file
     # For now, return mock data
     events = [

@@ -111,7 +111,13 @@ def add_user(card_id: str, name: str, access_level: str = 'user', department: st
         return False
 
 def get_user(card_id: str) -> Optional[Dict[str, Any]]:
-    """Get user by card ID"""
+    """
+    Get user by card ID for AUTHORIZATION purposes
+    
+    IMPORTANT: This function ONLY checks the 'users' table.
+    It does NOT check scan_events - those are audit logs only.
+    If a user is deleted, they will NOT be found here and access will be denied.
+    """
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -184,27 +190,84 @@ def update_user(card_id: str, name: str, access_level: str, department: str, sta
         return False
 
 def remove_user(card_id: str) -> bool:
-    """Remove user from database and any pending requests (keeps scan_events for audit)"""
+    """
+    COMPLETE USER REMOVAL - Removes user from all operational tables while preserving audit logs
+    
+    This function removes the user from:
+    - users table (so they can't access the shear anymore)
+    - pending_requests table (removes any pending access requests)
+    
+    This function PRESERVES:
+    - scan_events table (for historical audit/usage tracking)
+    
+    After removal, the card will be treated as "unknown" if scanned again.
+    """
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
         # Remove from users table (so they can't access anymore)
         cursor.execute('DELETE FROM users WHERE card_id = ?', (card_id,))
+        users_removed = cursor.rowcount
         
         # Also remove any pending requests for this card
         cursor.execute('DELETE FROM pending_requests WHERE card_id = ?', (card_id,))
+        pending_removed = cursor.rowcount
         
         # Note: We intentionally keep scan_events for audit purposes
+        # These logs are read-only and never used for authorization
         
         conn.commit()
         conn.close()
-        logger.info(f"Removed user and pending requests: {card_id}")
+        
+        logger.info(f"User removal complete for {card_id}: {users_removed} user records, {pending_removed} pending requests removed. Audit logs preserved.")
         return True
         
     except Exception as e:
         logger.error(f"Error removing user: {e}")
         return False
+
+def verify_user_removal(card_id: str) -> Dict[str, Any]:
+    """
+    Verify that a user has been completely removed from operational tables
+    Returns status of removal and any remaining references
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check users table
+        cursor.execute('SELECT COUNT(*) FROM users WHERE card_id = ?', (card_id,))
+        users_count = cursor.fetchone()[0]
+        
+        # Check pending_requests table  
+        cursor.execute('SELECT COUNT(*) FROM pending_requests WHERE card_id = ?', (card_id,))
+        pending_count = cursor.fetchone()[0]
+        
+        # Check scan_events table (these should remain for audit)
+        cursor.execute('SELECT COUNT(*) FROM scan_events WHERE card_id = ?', (card_id,))
+        scan_events_count = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        is_completely_removed = (users_count == 0 and pending_count == 0)
+        
+        return {
+            'card_id': card_id,
+            'completely_removed': is_completely_removed,
+            'users_remaining': users_count,
+            'pending_requests_remaining': pending_count,
+            'audit_logs_preserved': scan_events_count,
+            'status': 'COMPLETELY REMOVED' if is_completely_removed else 'INCOMPLETE REMOVAL'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error verifying user removal: {e}")
+        return {
+            'card_id': card_id,
+            'completely_removed': False,
+            'error': str(e)
+        }
 
 def update_user_status(card_id: str, status: str) -> bool:
     """Update user status"""
@@ -261,7 +324,13 @@ def add_pending_request(card_id: str, name: str, first_name: str = '', last_name
         return False
 
 def get_pending_request(card_id: str) -> Optional[Dict[str, Any]]:
-    """Get pending request by card ID"""
+    """
+    Get pending request by card ID for ACCESS REQUEST purposes
+    
+    IMPORTANT: This function ONLY checks the 'pending_requests' table.
+    It does NOT check scan_events - those are audit logs only.
+    If a user is deleted, their pending request is also removed.
+    """
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -331,6 +400,28 @@ def remove_pending_request(card_id: str) -> bool:
     except Exception as e:
         logger.error(f"Error removing pending request: {e}")
         return False
+
+def remove_all_pending_requests() -> int:
+    """Remove all pending requests and return count of removed requests"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Get count first
+        cursor.execute('SELECT COUNT(*) FROM pending_requests')
+        count = cursor.fetchone()[0]
+        
+        # Delete all
+        cursor.execute('DELETE FROM pending_requests')
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"Removed {count} pending requests")
+        return count
+        
+    except Exception as e:
+        logger.error(f"Error removing all pending requests: {e}")
+        return 0
 
 def log_scan_event(card_id: str, result: str = 'unknown') -> bool:
     """Log a card scan event"""

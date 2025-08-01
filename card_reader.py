@@ -24,6 +24,8 @@ class CardReader:
         self.card_buffer = []
         self.last_read_time = 0
         self.card_timeout = 0.5  # 500ms timeout between complete card reads
+        self.last_processed_card = None  # Track last processed card to prevent duplicates
+        self.duplicate_timeout = 2.0  # 2 seconds before allowing same card again
         
     def find_card_reader(self) -> Optional[Dict[str, Any]]:
         """Find connected card reader device"""
@@ -178,13 +180,9 @@ class CardReader:
             if new_bytes:
                 # If it's been too long since last read, start new card
                 if current_time - self.last_read_time > self.card_timeout and self.card_buffer:
-                    # Process previous card first
-                    previous_card = self.process_card_buffer()
-                    if previous_card:
-                        # Clear buffer for new card
-                        self.card_buffer = new_bytes
-                        self.last_read_time = current_time
-                        return previous_card
+                    # Process previous card first, but don't return it immediately
+                    # Instead, clear buffer and start fresh to prevent double processing
+                    self.card_buffer = []
                     
                 # Add to current buffer
                 self.card_buffer.extend(new_bytes)
@@ -225,29 +223,44 @@ class CardReader:
             # Create hex string from buffer
             hex_data = ''.join([f"{b:02x}" for b in self.card_buffer]).upper()
             
-            # Method 1: Use hex as card ID (most reliable for RDR-6081AKU)
-            card_id = hex_data
-            
-            # Method 2: Check if it contains readable ASCII
+            # Extract different ID formats
+            full_hex = hex_data
             ascii_data = ''.join([chr(b) for b in self.card_buffer if 32 <= b <= 126])
-            
-            # Method 3: Extract any numeric patterns
             numeric_data = ''.join([chr(b) for b in self.card_buffer if 48 <= b <= 57])
             
-            logger.info(f"Card processed - ID: {card_id}, ASCII: '{ascii_data}', Numeric: '{numeric_data}'")
+            # CONSISTENT ID SELECTION: Prefer numeric if available, otherwise ASCII, finally hex
+            if numeric_data and len(numeric_data) >= 4:
+                card_id = numeric_data
+                id_type = "numeric"
+            elif ascii_data and len(ascii_data) >= 4:
+                card_id = ascii_data.strip()
+                id_type = "ascii"
+            else:
+                card_id = full_hex
+                id_type = "hex"
+            
+            logger.info(f"Card processed - Selected ID: {card_id} (type: {id_type}), Full hex: {full_hex}, ASCII: '{ascii_data}', Numeric: '{numeric_data}'")
             
             # Print card processing info to console
             print(f"[CARD READER] ========== CARD PROCESSED ==========")
-            print(f"[CARD READER] Card ID: {card_id}")
-            print(f"[CARD READER] Raw hex: {hex_data}")
+            print(f"[CARD READER] Selected Card ID: {card_id} (type: {id_type})")
+            print(f"[CARD READER] Full hex: {full_hex}")
             print(f"[CARD READER] ASCII data: '{ascii_data}'")
             print(f"[CARD READER] Numeric data: '{numeric_data}'")
             print(f"[CARD READER] Buffer length: {len(self.card_buffer)} bytes")
             print(f"[CARD READER] =====================================")
             
-            return {
+            # Check for duplicate card reads to prevent double processing
+            current_time = time.time()
+            if (self.last_processed_card and 
+                self.last_processed_card['card_id'] == card_id and 
+                current_time - self.last_processed_card['timestamp'] < self.duplicate_timeout):
+                print(f"[CARD READER] DUPLICATE CARD DETECTED - Ignoring within {self.duplicate_timeout}s window")
+                return None
+            
+            card_result = {
                 'card_id': card_id,
-                'raw_data': hex_data,
+                'raw_data': full_hex,
                 'ascii_data': ascii_data,
                 'numeric_data': numeric_data,
                 'facility_code': None,  # RDR-6081AKU doesn't typically separate facility code
@@ -255,8 +268,17 @@ class CardReader:
                 'timestamp': time.time(),
                 'reader_id': 'RDR-6081AKU',
                 'card_type': 'proximity',
-                'buffer_length': len(self.card_buffer)
+                'buffer_length': len(self.card_buffer),
+                'id_type': id_type
             }
+            
+            # Store this card as the last processed to prevent duplicates
+            self.last_processed_card = {
+                'card_id': card_id,
+                'timestamp': current_time
+            }
+            
+            return card_result
             
         except Exception as e:
             logger.error(f"Error processing card buffer: {e}")

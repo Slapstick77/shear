@@ -522,33 +522,33 @@
                     if (data.success && data.requests.length > 0) {
                         requestsList.innerHTML = data.requests.map(request => {
                             const hasUserInfo = request.first_name && request.last_name;
-                            const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : 'Unknown User';
+                            const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : request.name || 'Unknown User';
                             
                             return `
-                            <div class="request-item">
-                                <div class="request-info">
-                                    <strong>${hasUserInfo ? 'Access Request' : 'Unknown Card Scanned'}</strong><br>
-                                    ${hasUserInfo ? `Name: <strong>${displayName}</strong><br>` : ''}
-                                    Card ID: <code>${request.card_id}</code><br>
-                                    Submitted: ${new Date(request.timestamp).toLocaleString()}<br>
-                                    ${request.department ? `Department: ${request.department}<br>` : ''}
-                                    ${request.shift ? `Shift: ${request.shift}<br>` : ''}
-                                    <small>Status: Pending Approval</small>
+                                <div class="request-item">
+                                    <div class="request-info">
+                                        <strong>Access Request</strong><br>
+                                        Name: <strong>${displayName}</strong><br>
+                                        Card ID: <code>${request.card_id}</code><br>
+                                        Department: ${request.department || 'Not specified'}<br>
+                                        Shift: ${request.shift || 'Not specified'}<br>
+                                        Requested: ${new Date(request.requested_date).toLocaleString()}<br>
+                                        <small>Status: Pending Approval</small>
+                                    </div>
+                                    <div class="request-form">
+                                        <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" required>
+                                        <input type="text" id="dept-${request.card_id}" placeholder="Department (optional)" value="${request.department || ''}">
+                                        <select id="level-${request.card_id}">
+                                            <option value="user">User Access</option>
+                                            ${userRole === 'admin' ? '<option value="manager">Manager Access</option>' : ''}
+                                            ${userRole === 'admin' ? '<option value="admin">Admin Access</option>' : ''}
+                                        </select>
+                                    </div>
+                                    <div class="request-actions">
+                                        <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
+                                        <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
+                                    </div>
                                 </div>
-                                <div class="request-form">
-                                    <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" ${hasUserInfo ? 'readonly' : ''} required>
-                                    <input type="text" id="dept-${request.card_id}" placeholder="Department (optional)" value="${request.department || ''}">
-                                    <select id="level-${request.card_id}">
-                                        <option value="user">User Access</option>
-                                        ${userRole === 'admin' ? '<option value="manager">Manager Access</option>' : ''}
-                                        ${userRole === 'admin' ? '<option value="admin">Admin Access</option>' : ''}
-                                    </select>
-                                </div>
-                                <div class="request-actions">
-                                    <button class="btn" onclick="approveRequest('${request.card_id}')">Approve</button>
-                                    <button class="btn danger" onclick="denyRequest('${request.card_id}')">Deny</button>
-                                </div>
-                            </div>
                             `;
                         }).join('');
                     } else {

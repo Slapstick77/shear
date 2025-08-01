@@ -267,7 +267,7 @@
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
             <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
-            <a href="#" class="nav-btn" onclick="showSection('management')">Shifts & Departments</a>
+            <a href="#" class="nav-btn" onclick="showSection('management')">Shifts</a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="#" class="nav-btn" onclick="showSection('settings')">Settings</a>
@@ -327,24 +327,12 @@
                 </div>
             </div>
             
-            <!-- Shifts and Departments Management Section -->
+            <!-- Shifts Management Section -->
             <div id="management" class="section">
                 <div class="card">
-                    <h3>🏢 Shifts & Departments Management</h3>
+                    <h3>⏰ Shifts Management</h3>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <!-- Departments -->
-                        <div>
-                            <h4>Departments</h4>
-                            <div style="margin-bottom: 10px;">
-                                <input type="text" id="new-department" placeholder="New Department Name" style="margin-right: 10px; padding: 8px;">
-                                <button class="btn" onclick="addDepartment()">Add Department</button>
-                            </div>
-                            <div id="departments-list" style="border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;">
-                                <div style="padding: 10px;">Loading departments...</div>
-                            </div>
-                        </div>
-                        
+                    <div style="max-width: 500px;">
                         <!-- Shifts -->
                         <div>
                             <h4>Shifts</h4>
@@ -951,21 +939,21 @@
                     
                     requestsList.innerHTML = requestsData.requests.map(request => {
                         const hasUserInfo = request.first_name && request.last_name;
-                        const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : 'Unknown User';
+                        const displayName = hasUserInfo ? `${request.first_name} ${request.last_name}` : request.name || 'Unknown User';
                         
                         return `
                             <div class="request-item">
                                 <div class="request-info">
-                                    <strong>${hasUserInfo ? 'Access Request' : 'Unknown Card Scanned'}</strong><br>
-                                    ${hasUserInfo ? `Name: <strong>${displayName}</strong><br>` : ''}
+                                    <strong>Access Request</strong><br>
+                                    Name: <strong>${displayName}</strong><br>
                                     Card ID: <code>${request.card_id}</code><br>
-                                    Submitted: ${new Date(request.timestamp).toLocaleString()}<br>
-                                    ${request.department ? `Department: ${request.department}<br>` : ''}
-                                    ${request.shift ? `Shift: ${request.shift}<br>` : ''}
-                                    <small>Status: Pending Approval${hasUserInfo ? ' - User Info Provided' : ' - Awaiting User Info'}</small>
+                                    Department: ${request.department || 'Not specified'}<br>
+                                    Shift: ${request.shift || 'Not specified'}<br>
+                                    Requested: ${new Date(request.requested_date).toLocaleString()}<br>
+                                    <small>Status: Pending Approval</small>
                                 </div>
                                 <div class="request-form">
-                                    <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" ${hasUserInfo ? 'readonly' : ''} required>
+                                    <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" required>
                                     <select id="dept-${request.card_id}">
                                         <option value="">Select Department</option>
                                         ${departments.map(dept => `<option value="${dept}" ${dept === request.department ? 'selected' : ''}>${dept}</option>`).join('')}
@@ -1105,29 +1093,7 @@
             });
         }
         
-        // Shifts and Departments Management Functions
-        function loadDepartments() {
-            fetch('/api/departments')
-                .then(response => response.json())
-                .then(data => {
-                    const deptsList = document.getElementById('departments-list');
-                    if (data.success && data.departments.length > 0) {
-                        deptsList.innerHTML = data.departments.map(dept => 
-                            '<div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">' +
-                                '<span>' + dept + '</span>' +
-                                '<button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="removeDepartment(\'' + dept + '\')">Remove</button>' +
-                            '</div>'
-                        ).join('');
-                    } else {
-                        deptsList.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No departments found</div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading departments:', error);
-                    document.getElementById('departments-list').innerHTML = '<div style="padding: 10px; color: red;">Error loading departments</div>';
-                });
-        }
-        
+        // Shifts Management Functions
         function loadShifts() {
             fetch('/api/shifts')
                 .then(response => response.json())
@@ -1149,36 +1115,7 @@
                     document.getElementById('shifts-list').innerHTML = '<div style="padding: 10px; color: red;">Error loading shifts</div>';
                 });
         }
-        
-        function addDepartment() {
-            const deptName = document.getElementById('new-department').value.trim();
-            if (!deptName) {
-                alert('Please enter a department name');
-                return;
-            }
-            
-            fetch('/api/departments', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name: deptName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('new-department').value = '';
-                    loadDepartments();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error adding department:', error);
-                alert('Error adding department');
-            });
-        }
-        
+
         function addShift() {
             const shiftName = document.getElementById('new-shift').value.trim();
             if (!shiftName) {
@@ -1207,27 +1144,7 @@
                 alert('Error adding shift');
             });
         }
-        
-        function removeDepartment(deptName) {
-            if (confirm('Are you sure you want to remove the department "' + deptName + '"?')) {
-                fetch('/api/departments/' + encodeURIComponent(deptName), {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        loadDepartments();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error removing department:', error);
-                    alert('Error removing department');
-                });
-            }
-        }
-        
+
         function removeShift(shiftName) {
             if (confirm('Are you sure you want to remove the shift "' + shiftName + '"?')) {
                 fetch('/api/shifts/' + encodeURIComponent(shiftName), {
@@ -1250,7 +1167,6 @@
         
         // Load initial data
         loadUsers();
-        loadDepartments();
         loadShifts();
         
         // Password form submission handler

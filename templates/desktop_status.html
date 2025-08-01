@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Shear Access - Desktop Status</title>
+    <style>
+        /* Desktop display optimization */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial Black', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #2c2c2c;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            color: white;
+            overflow: hidden;
+        }
+        
+        /* Header with title */
+        .header {
+            background-color: #1a1a1a;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 0;
+            color: #ffffff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            flex: 1;
+        }
+        
+        /* Admin access gear */
+        .admin-access {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            color: #cccccc;
+        }
+        
+        .admin-access:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: #ffffff;
+        }
+        
+        /* Main content container */
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        /* Status display */
+        .status-display {
+            font-size: 4em;
+            font-weight: bold;
+            margin-bottom: 30px;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8);
+            line-height: 1.2;
+        }
+        
+        .status-display.locked {
+            color: #ff4444;
+        }
+        
+        .status-display.unlocked {
+            color: #44ff44;
+        }
+        
+        /* Username display */
+        .username-display {
+            font-size: 2em;
+            margin-bottom: 30px;
+            color: #ffffff;
+            font-weight: normal;
+        }
+        
+        /* Instruction text */
+        .instruction-text {
+            font-size: 1.8em;
+            color: #ffffff;
+            margin: 30px 0;
+            font-weight: normal;
+            text-align: center;
+            line-height: 1.3;
+        }
+        
+        /* Device info notice */
+        .device-notice {
+            background: rgba(0, 123, 255, 0.2);
+            border: 2px solid rgba(0, 123, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 30px 0;
+            font-size: 1.2em;
+            color: #87ceeb;
+            text-align: center;
+        }
+        
+        .device-notice a {
+            color: #87ceeb;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        
+        .device-notice a:hover {
+            color: #ffffff;
+        }
+        
+        /* Footer label */
+        .footer {
+            background-color: #1a1a1a;
+            padding: 15px;
+            text-align: center;
+            border-top: 2px solid #444;
+        }
+        
+        .footer-label {
+            font-size: 1.2em;
+            color: #cccccc;
+            margin: 0;
+            font-style: italic;
+        }
+        
+        .refresh-notice {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 5px;
+        }
+        
+        /* Admin panel styles */
+        .admin-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .admin-panel-content {
+            background: rgba(44, 44, 44, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+            border: 2px solid #666;
+            text-align: center;
+            color: white;
+            max-width: 450px;
+            width: 90%;
+        }
+        
+        .admin-panel input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1.2em;
+            border: 2px solid #666;
+        }
+        
+        .admin-panel input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .admin-panel button {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(40, 167, 69, 0.7);
+            color: white;
+            cursor: pointer;
+            border: 2px solid rgba(40, 167, 69, 0.9);
+            font-size: 1.1em;
+            min-width: 120px;
+            min-height: 50px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .admin-panel button:hover {
+            background: rgba(40, 167, 69, 0.9);
+            transform: scale(1.05);
+        }
+        
+        .admin-panel button.cancel {
+            background: rgba(220, 53, 69, 0.7);
+            border-color: rgba(220, 53, 69, 0.9);
+        }
+        
+        .admin-panel button.cancel:hover {
+            background: rgba(220, 53, 69, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="title">Shear Access - Desktop Status</h1>
+        <div id="admin-access" class="admin-access" onclick="showAdminAccess()" title="Admin Access">
+            ⚙️
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="status-display" class="status-display locked">
+            🔒 Shear is Locked
+        </div>
+        
+        <div id="username-display" class="username-display" style="display: none;">
+        </div>
+        
+        <div class="instruction-text">
+            Card access managed from tablet station
+        </div>
+        
+        <div class="device-notice">
+            💡 This is the desktop view for status monitoring only<br>
+            For card access requests, use the <a href="/operating">tablet interface</a>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p id="footer-label" class="footer-label">Waiting for badge scan…</p>
+        <p class="refresh-notice">Status updates every 10 seconds</p>
+    </div>
+
+    <!-- Hidden admin access panel -->
+    <div id="admin-panel" class="admin-panel" style="display: none;">
+        <div class="admin-panel-content">
+            <h3>Admin Access</h3>
+            <p>Enter admin password:</p>
+            <input type="password" id="admin-password" placeholder="Password">
+            <br>
+            <button onclick="adminLogin()">Login</button>
+            <button class="cancel" onclick="hideAdminAccess()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // Authentication state management
+        let isAdminLoggedIn = false;
+        
+        // Check authentication status on page load
+        function checkAuthStatus() {
+            fetch('/api/auth-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.authenticated && data.login_method === 'password' && data.role === 'admin') {
+                        setAdminLoggedIn(true);
+                    }
+                })
+                .catch(error => {
+                    console.log('Auth status check failed:', error);
+                });
+        }
+        
+        // Check shear status and update display
+        function checkShearStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateShearDisplay(data.shear);
+                })
+                .catch(error => {
+                    console.log('Shear status check failed:', error);
+                });
+        }
+        
+        // Update shear display based on status
+        function updateShearDisplay(shearData) {
+            const statusDisplay = document.getElementById('status-display');
+            const usernameDisplay = document.getElementById('username-display');
+            const footerLabel = document.getElementById('footer-label');
+            
+            if (shearData.unlocked) {
+                // Shear is unlocked
+                const userName = shearData.unlock_user?.name || 'Unknown User';
+                statusDisplay.className = 'status-display unlocked';
+                statusDisplay.innerHTML = '🔓 Shear Unlocked';
+                
+                usernameDisplay.style.display = 'block';
+                usernameDisplay.textContent = `In use by ${userName}`;
+                
+                // Only show timer when 30 seconds or less remain
+                const remaining = Math.floor(shearData.timeout_remaining);
+                if (remaining <= 30 && remaining > 0) {
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    footerLabel.textContent = `Shear has been idle, will lock in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    footerLabel.textContent = `Shear in use by ${userName}`;
+                }
+            } else {
+                // Shear is locked
+                statusDisplay.className = 'status-display locked';
+                statusDisplay.innerHTML = '🔒 Shear is Locked';
+                usernameDisplay.style.display = 'none';
+                footerLabel.textContent = 'Waiting for badge scan…';
+            }
+        }
+        
+        // Set admin logged in state
+        function setAdminLoggedIn(loggedIn) {
+            isAdminLoggedIn = loggedIn;
+            const adminGear = document.getElementById('admin-access');
+            if (loggedIn) {
+                adminGear.style.background = 'rgba(40, 167, 69, 0.3)';
+                adminGear.style.borderColor = 'rgba(40, 167, 69, 0.7)';
+                adminGear.style.color = '#28a745';
+                adminGear.title = 'Admin Access - Logged In (Click to go to Dashboard)';
+            } else {
+                adminGear.style.background = 'rgba(255, 255, 255, 0.1)';
+                adminGear.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                adminGear.style.color = '#cccccc';
+                adminGear.title = 'Admin Access';
+            }
+        }
+        
+        function adminLogin() {
+            const password = document.getElementById('admin-password').value;
+            
+            fetch('/api/admin-login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    setAdminLoggedIn(true);
+                    hideAdminAccess();
+                    window.location.href = '/admin';
+                } else {
+                    alert('Invalid password');
+                    document.getElementById('admin-password').value = '';
+                    document.getElementById('admin-password').focus();
+                }
+            })
+            .catch(error => {
+                alert('Login error: ' + error.message);
+                document.getElementById('admin-password').value = '';
+            });
+        }
+        
+        function showAdminAccess() {
+            if (isAdminLoggedIn) {
+                window.location.href = '/admin';
+                return;
+            }
+            
+            document.getElementById('admin-panel').style.display = 'flex';
+            document.getElementById('admin-password').focus();
+        }
+        
+        function hideAdminAccess() {
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('admin-password').value = '';
+        }
+        
+        // Handle Enter key in admin password field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('admin-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    adminLogin();
+                }
+            });
+        });
+        
+        // Light polling for desktop - no SSE conflicts, infrequent updates
+        let statusCheckInterval = setInterval(() => {
+            // Only check status if admin panel is not open
+            const adminPanel = document.getElementById('admin-panel');
+            if (!adminPanel || adminPanel.style.display === 'none') {
+                checkAuthStatus();
+                checkShearStatus();
+            }
+        }, 10000); // Check every 10 seconds - light desktop monitoring only
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+            checkShearStatus();
+        });
+    </script>
+</body>
+</html>

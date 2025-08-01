@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Shear Access</title>
     <style>
         /* Factory display optimization */
@@ -143,7 +146,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
+            z-index: 9999;
         }
         
         .admin-panel-content {
@@ -408,23 +411,24 @@
             <div style="margin: 15px 0;">
                 <input type="text" id="first-name" placeholder="First Name" required>
                 <input type="text" id="last-name" placeholder="Last Name" required>
-                <input type="email" id="email" placeholder="Email Address">
                 <select id="department" style="width: 100%; padding: 15px; margin: 15px 0; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; font-size: clamp(1em, 3vw, 1.3em); border: 2px solid #666;">
                     <option value="">Select Department</option>
-                    <option value="Production">Production</option>
-                    <option value="Quality Control">Quality Control</option>
+                    <option value="Sheet Shop">Sheet Shop</option>
+                    <option value="Base Shop">Base Shop</option>
+                    <option value="Electric Shop">Electric Shop</option>
+                    <option value="Assembly">Assembly</option>
+                    <option value="Door Shop">Door Shop</option>
+                    <option value="QA">QA</option>
                     <option value="Maintenance">Maintenance</option>
-                    <option value="Engineering">Engineering</option>
                     <option value="Management">Management</option>
-                    <option value="Administration">Administration</option>
+                    <option value="Engineering">Engineering</option>
                     <option value="Other">Other</option>
                 </select>
                 <select id="shift" style="width: 100%; padding: 15px; margin: 15px 0; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; font-size: clamp(1em, 3vw, 1.3em); border: 2px solid #666;">
                     <option value="">Select Shift</option>
-                    <option value="Day Shift">Day Shift (6AM - 2PM)</option>
-                    <option value="Evening Shift">Evening Shift (2PM - 10PM)</option>
-                    <option value="Night Shift">Night Shift (10PM - 6AM)</option>
-                    <option value="Flexible">Flexible Schedule</option>
+                    <option value="First">First</option>
+                    <option value="Second">Second</option>
+                    <option value="Third">Third</option>
                 </select>
             </div>
             <div style="text-align: center; margin: 20px 0;">
@@ -561,19 +565,6 @@
             }
         }
         
-        // Admin access functions
-        function showAdminAccess() {
-            // If admin is already logged in, bypass login and go directly to dashboard
-            if (isAdminLoggedIn) {
-                window.location.href = '/admin';
-                return;
-            }
-            
-            clearInterval(autoRefreshInterval);
-            document.getElementById('admin-panel').style.display = 'flex';
-            document.getElementById('admin-password').focus();
-        }
-        
         // Key access function
         function keyAccess() {
             if (isCardLoggedIn && (userRole === 'admin' || userRole === 'manager')) {
@@ -585,18 +576,6 @@
                 }
             }
             // If not logged in with card, do nothing (icon is disabled)
-        }
-        
-        function hideAdminAccess() {
-            document.getElementById('admin-panel').style.display = 'none';
-            document.getElementById('admin-password').value = '';
-            // Resume auto-refresh
-            autoRefreshInterval = setInterval(() => {
-                const adminPanel = document.getElementById('admin-panel');
-                if (!adminPanel || adminPanel.style.display === 'none') {
-                    window.location.reload();
-                }
-            }, 30000); // Refresh every 30 seconds instead of 5
         }
         
         function adminLogin() {
@@ -639,119 +618,303 @@
             });
         });
 
-        // Check status infrequently - only for critical system health monitoring
-        let statusCheckInterval = setInterval(() => {
-            // Only check status if admin panel is not open
-            const adminPanel = document.getElementById('admin-panel');
-            if (!adminPanel || adminPanel.style.display === 'none') {
-                // Only check auth status and shear status - no card scan checking here
-                checkAuthStatus();
-                checkShearStatus();
-                // Card scanning is handled by event-driven checkForNewCardScan() 
-            }
-        }, 30000); // Check every 30 seconds for basic system health only
+        // SSE handles all real-time updates - no polling needed for tablets
+        // This eliminates browser conflicts completely
+        console.log('Tablet interface: Using SSE-only for real-time updates');
         
-        // Separate interval for card scanning - more frequent but lightweight
-        let cardScanInterval = setInterval(() => {
-            const adminPanel = document.getElementById('admin-panel');
-            if (!adminPanel || adminPanel.style.display === 'none') {
-                checkForNewCardScan(); // Only check for new card scans
-            }
-        }, 2000); // Check for card scans every 2 seconds
+        // Setup Server-Sent Events for real-time card scan notifications
+        let cardEventSource = null;
         
-        // Track last known card to detect new scans
-        let lastKnownCard = null;
-        
-        // Check for new card scans and handle accordingly
-        function checkForNewCardScan() {
-            fetch('/api/last-card-status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.card_id && data.card_id !== lastKnownCard) {
-                        lastKnownCard = data.card_id;
-                        handleCardScanResult(data);
+        function setupCardScanEvents() {
+            try {
+                console.log('Starting SSE connection setup...');
+                cardEventSource = new EventSource('/api/card-events');
+                console.log('EventSource created:', cardEventSource);
+                console.log('EventSource readyState:', cardEventSource.readyState);
+                
+                cardEventSource.onopen = function(event) {
+                    console.log('SSE connection opened successfully');
+                    console.log('SSE readyState after open:', cardEventSource.readyState);
+                };
+                
+                cardEventSource.onmessage = function(event) {
+                    console.log('SSE raw event received:', event);
+                    console.log('SSE event data:', event.data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('SSE parsed data:', data);
+                        
+                        if (data.type === 'card_scan') {
+                            console.log('Received card scan event via SSE:', data);
+                            // Update last known card and status
+                            lastKnownCard = data.card_id;
+                            lastKnownStatus = data.status;
+                            // Handle the card scan
+                            handleCardScanResult(data);
+                        } else if (data.type === 'heartbeat') {
+                            console.log('SSE heartbeat received');
+                        }
+                    } catch (error) {
+                        console.error('Error parsing SSE data:', error);
+                        console.error('Raw event data was:', event.data);
                     }
-                })
-                .catch(error => {
-                    console.error('Error checking card status:', error);
-                });
+                };
+                
+                cardEventSource.onerror = function(error) {
+                    console.error('SSE connection error occurred:', error);
+                    console.error('SSE readyState during error:', cardEventSource.readyState);
+                    console.error('SSE URL:', cardEventSource.url);
+                    
+                    // Reconnect after 5 seconds
+                    setTimeout(() => {
+                        if (cardEventSource.readyState === EventSource.CLOSED) {
+                            console.log('Attempting to reconnect SSE...');
+                            setupCardScanEvents();
+                        }
+                    }, 5000);
+                };
+                
+                console.log('SSE connection setup complete');
+                
+                // Test the connection after a short delay
+                setTimeout(() => {
+                    console.log('SSE connection status check:');
+                    console.log('ReadyState:', cardEventSource.readyState);
+                    console.log('URL:', cardEventSource.url);
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Error setting up SSE:', error);
+            }
         }
         
-        // Handle card scan results based on status
+        // Start SSE connection
+        setupCardScanEvents();
+        
+        // Track last known card and status 
+        let lastKnownCard = null;
+        let lastKnownStatus = null;
+        let requestModalShown = false; // Flag to prevent duplicate modals
+        
+        // Check if this is a tablet device
+        function isTabletDevice() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            // More precise mobile/tablet detection
+            const isMobilePhone = /android.*mobile|iphone|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+            const isTablet = /ipad|android(?!.*mobile)|tablet/i.test(userAgent);
+            
+            // Check for touch capability as additional indicator
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            // Screen size checks - be more conservative
+            const screenWidth = window.screen ? window.screen.width : window.innerWidth;
+            const screenHeight = window.screen ? window.screen.height : window.innerHeight;
+            const isTabletSize = (screenWidth >= 768 && screenWidth <= 1366) && hasTouch;
+            
+            // Final determination - must be explicit mobile/tablet OR have tablet size WITH touch
+            const isTabletDevice = isTablet || isMobilePhone || (isTabletSize && hasTouch);
+            
+            console.log('Device detection:', {
+                userAgent: userAgent,
+                isMobilePhone: isMobilePhone,
+                isTablet: isTablet,
+                hasTouch: hasTouch,
+                screenWidth: screenWidth,
+                screenHeight: screenHeight,
+                isTabletSize: isTabletSize,
+                finalResult: isTabletDevice
+            });
+            
+            return isTabletDevice;
+        }
+        
+        // Handle card scan results from SSE events
         function handleCardScanResult(data) {
-            console.log('Card scan result:', data);
+            console.log('=== HANDLING CARD SCAN RESULT ===');
+            console.log('Card ID:', data.card_id);
+            console.log('Status:', data.status);
+            console.log('User Name:', data.user_name);
+            console.log('Message:', data.message);
+            
+            const isTablet = isTabletDevice();
+            console.log('Device Type:', isTablet ? 'TABLET/MOBILE' : 'DESKTOP');
+            console.log('Request Modal Shown Flag:', requestModalShown);
+            console.log('=====================================');
+            
+            // Immediately update status after any card scan for responsive UI
+            setTimeout(() => {
+                checkAuthStatus();
+                checkShearStatus();
+            }, 100); // Small delay to allow backend to process
+            
+            // Prevent duplicate processing if modal is already shown
+            if (requestModalShown && data.status === 'unknown') {
+                console.log('>>> Modal already shown, skipping duplicate request');
+                return;
+            }
+            
+            // Update tracking
+            lastKnownCard = data.card_id;
+            lastKnownStatus = data.status;
+            
+            // Reset modal flag for all cases except unknown
+            if (data.status !== 'unknown') {
+                requestModalShown = false;
+            }
             
             switch(data.status) {
-                case 'info_required':
-                    // Unknown card that needs user info
-                    showAccessRequestModal(data.card_id);
-                    break;
-                case 'authorization_pending':
-                    // User has provided info, waiting for admin approval
-                    showMessage(`Authorization pending for ${data.user_name || 'user'} - Admin approval required`);
-                    break;
                 case 'authorized':
-                    // User authorized and logged in
+                    // User already exists in system - access granted
+                    console.log('User authorized - access granted');
+                    // Close any existing modals first
+                    closeExistingModals();
                     showMessage(`Welcome ${data.user_name || 'User'} - Access granted`);
                     break;
+                    
+                case 'authorization_pending':
+                    // User has pending request - waiting for admin approval - NO MODAL, JUST MESSAGE
+                    console.log('User has pending request - showing message only');
+                    // Close any existing modals first
+                    closeExistingModals();
+                    showMessage(`Request already submitted for ${data.user_name || 'user'} - Admin approval required`);
+                    break;
+                    
                 case 'access_denied':
-                    // Known user but access denied
-                    showMessage(`Access denied: ${data.message}`);
+                    // User exists but access is denied
+                    console.log('User access denied');
+                    // Close any existing modals first
+                    closeExistingModals();
+                    showMessage(`Access denied: ${data.message || 'Access denied'}`);
                     break;
+                    
                 case 'unknown':
-                    // Unknown card
-                    showAccessRequestModal(data.card_id);
-                    break;
+                case 'info_required':
                 default:
-                    console.log('No action needed for card status:', data.status);
+                    // No user found and no pending request - prompt for access request
+                    console.log('Unknown user detected');
+                    
+                    // Only show modal on tablet devices
+                    if (!isTablet) {
+                        console.log('>>> DESKTOP BROWSER: Skipping modal display, tablet will handle');
+                        showMessage('Unknown card detected - Please use tablet to request access');
+                        return;
+                    }
+                    
+                    console.log('>>> TABLET DEVICE: Showing access request modal');
+                    
+                    // Only show modal if not already shown
+                    if (!requestModalShown) {
+                        requestModalShown = true; // Set flag to prevent duplicates
+                        showAccessRequestModal(data.card_id);
+                        
+                        // Auto-reset flag after 10 seconds in case something goes wrong
+                        setTimeout(() => {
+                            if (requestModalShown) {
+                                console.log('Auto-resetting modal flag after timeout');
+                                requestModalShown = false;
+                            }
+                        }, 10000);
+                    } else {
+                        console.log('>>> Access request modal already shown, skipping');
+                    }
+                    break;
             }
+        }
+        
+        // Helper function to close existing modals
+        function closeExistingModals() {
+            const existingModals = document.querySelectorAll('.admin-panel');
+            existingModals.forEach(modal => {
+                if (modal.id !== 'admin-panel' && modal.style.display === 'flex') { // Don't close admin login panel
+                    console.log('Closing existing modal:', modal.id);
+                    modal.style.display = 'none';
+                }
+            });
         }
         
         // Show temporary message to user
         function showMessage(message) {
             console.log('Message:', message);
-            // You could add a toast notification or status display here
+            
+            // Create a temporary modal to show the message
+            const messageModal = document.createElement('div');
+            messageModal.className = 'admin-panel';
+            messageModal.style.display = 'flex';
+            messageModal.innerHTML = `
+                <div class="admin-panel-content">
+                    <h3>📋 Status Update</h3>
+                    <p>${message}</p>
+                    <button onclick="this.closest('.admin-panel').remove()" class="access-btn">OK</button>
+                </div>
+            `;
+            
+            document.body.appendChild(messageModal);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (messageModal.parentNode) {
+                    messageModal.remove();
+                }
+            }, 5000);
         }
         
-        // Stop status checks when admin panel opens
+        // Stop SSE when admin panel opens (tablet uses SSE-only)
         function showAdminAccess() {
-            clearInterval(statusCheckInterval);
-            clearInterval(cardScanInterval);
+            // If admin is already logged in, bypass login and go directly to dashboard
+            if (isAdminLoggedIn) {
+                window.location.href = '/admin';
+                return;
+            }
+            
+            // Close SSE connection while admin panel is open
+            if (cardEventSource) {
+                cardEventSource.close();
+                cardEventSource = null;
+                console.log('SSE connection closed for admin panel');
+            }
             document.getElementById('admin-panel').style.display = 'flex';
             document.getElementById('admin-password').focus();
         }
         
-        // Resume status checks when admin panel closes
+        // Resume SSE events when admin panel closes (tablet uses SSE-only)
         function hideAdminAccess() {
             document.getElementById('admin-panel').style.display = 'none';
             document.getElementById('admin-password').value = '';
-            // Resume status checks
-            statusCheckInterval = setInterval(() => {
-                const adminPanel = document.getElementById('admin-panel');
-                if (!adminPanel || adminPanel.style.display === 'none') {
-                    checkAuthStatus();
-                    checkShearStatus();
-                    // Card scanning is event-driven, no need to poll here
-                }
-            }, 30000); // Check every 30 seconds for system health only
             
-            // Resume card scan checking
-            cardScanInterval = setInterval(() => {
-                const adminPanel = document.getElementById('admin-panel');
-                if (!adminPanel || adminPanel.style.display === 'none') {
-                    checkForNewCardScan();
-                }
-            }, 2000); // Check for card scans every 2 seconds
+            // Restart SSE connection only - no polling for tablets
+            console.log('Restarting SSE connection after admin panel close');
+            setupCardScanEvents();
         }
         
         // Access Request Functions
         function showAccessRequestModal(cardId) {
-            document.getElementById('access-request-modal').style.display = 'flex';
-            document.getElementById('pending-card-id').value = cardId;
+            console.log('>>> SHOWING ACCESS REQUEST MODAL for card:', cardId);
+            
+            // Make sure the modal element exists
+            let modal = document.getElementById('access-request-modal');
+            if (!modal) {
+                console.error('access-request-modal element not found!');
+                return;
+            }
+            
+            // Make sure the card ID input exists
+            let cardInput = document.getElementById('pending-card-id');
+            if (!cardInput) {
+                console.error('pending-card-id element not found!');
+                return;
+            }
+            
+            modal.style.display = 'flex';
+            cardInput.value = cardId;
+            console.log('>>> ACCESS REQUEST MODAL DISPLAYED');
         }
         
         function hideAccessRequestModal() {
+            console.log('>>> HIDING ACCESS REQUEST MODAL');
             document.getElementById('access-request-modal').style.display = 'none';
+            requestModalShown = false; // Reset flag when modal is closed
+            console.log('>>> Modal flag reset to false');
         }
         
         function showAccessRequestForm() {
@@ -763,7 +926,6 @@
             document.getElementById('access-request-form').style.display = 'none';
             document.getElementById('first-name').value = '';
             document.getElementById('last-name').value = '';
-            document.getElementById('email').value = '';
             document.getElementById('department').value = '';
             document.getElementById('shift').value = '';
         }
@@ -772,12 +934,22 @@
             const cardId = document.getElementById('pending-card-id').value;
             const firstName = document.getElementById('first-name').value.trim();
             const lastName = document.getElementById('last-name').value.trim();
-            const email = document.getElementById('email').value.trim();
             const department = document.getElementById('department').value;
             const shift = document.getElementById('shift').value;
             
+            // Validate all fields are filled
             if (!firstName || !lastName) {
                 alert('Please enter both first and last name');
+                return;
+            }
+            
+            if (!department) {
+                alert('Please select a department');
+                return;
+            }
+            
+            if (!shift) {
+                alert('Please select a shift');
                 return;
             }
             
@@ -790,7 +962,6 @@
                     card_id: cardId,
                     first_name: firstName,
                     last_name: lastName,
-                    email: email,
                     department: department,
                     shift: shift
                 })
@@ -800,6 +971,9 @@
                 if (data.success) {
                     alert('Access request submitted successfully! Please wait for approval from management.');
                     hideAccessRequestForm();
+                    requestModalShown = false; // Reset flag after successful submission
+                    // Reset the card tracking so the status will be rechecked
+                    lastKnownStatus = null;
                 } else {
                     alert('Error submitting request: ' + data.message);
                 }
