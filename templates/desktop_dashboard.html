@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Shear Access - Desktop Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 2em;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .admin-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .admin-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .admin-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .admin-btn.admin {
+            background: rgba(40, 167, 69, 0.3);
+            border-color: rgba(40, 167, 69, 0.7);
+        }
+        
+        .admin-btn.admin:hover {
+            background: rgba(40, 167, 69, 0.5);
+        }
+        
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        /* Status panel */
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .shear-status {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        
+        .shear-status.locked {
+            color: #ff6b6b;
+        }
+        
+        .shear-status.unlocked {
+            color: #51cf66;
+        }
+        
+        .status-text {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        
+        .status-details {
+            font-size: 1em;
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+        
+        .manual-control {
+            background: rgba(220, 53, 69, 0.8);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+        
+        .manual-control:hover {
+            background: rgba(220, 53, 69, 1);
+            transform: scale(1.05);
+        }
+        
+        /* Activity panel */
+        .activity-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .activity-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .activity-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 3px solid #4dabf7;
+            font-size: 0.9em;
+        }
+        
+        .log-entry.success {
+            border-left-color: #51cf66;
+        }
+        
+        .log-entry.warning {
+            border-left-color: #ffd43b;
+        }
+        
+        .log-entry.error {
+            border-left-color: #ff6b6b;
+        }
+        
+        .timestamp {
+            opacity: 0.7;
+            font-size: 0.8em;
+        }
+        
+        /* Info boxes */
+        .info-grid {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .info-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }
+        
+        .info-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .info-title {
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .info-value.connected {
+            color: #51cf66;
+        }
+        
+        .info-value.disconnected {
+            color: #ff6b6b;
+        }
+        
+        /* Tablet redirect notice */
+        .tablet-notice {
+            background: rgba(255, 193, 7, 0.2);
+            border: 1px solid rgba(255, 193, 7, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .tablet-notice h3 {
+            color: #ffc107;
+            margin-bottom: 10px;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .admin-controls {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🔧 Shear Access Control</div>
+        <div class="admin-controls">
+            <button id="admin-login-btn" class="admin-btn" onclick="showAdminLogin()">Admin Login</button>
+            <a href="/admin" class="admin-btn admin" id="admin-dashboard" style="display: none;">Admin Dashboard</a>
+        </div>
+    </div>
+
+    <div class="tablet-notice">
+        <h3>📱 For Card Scanning</h3>
+        <p>Use the tablet interface at the shear workstation. This desktop view is for monitoring and administration only.</p>
+    </div>
+
+    <div class="main-content">
+        <div class="status-panel">
+            <div id="shear-icon" class="shear-status locked">🔒</div>
+            <div id="status-text" class="status-text">Shear is Locked</div>
+            <div id="status-details" class="status-details">Waiting for badge scan</div>
+            <button id="manual-lock-btn" class="manual-control" onclick="manualLock()" style="display: none;">🔒 Lock Now</button>
+        </div>
+
+        <div class="activity-panel">
+            <div class="activity-title">📋 Recent Activity</div>
+            <div id="activity-log" class="activity-log">
+                <div class="log-entry">
+                    <div class="timestamp">System started</div>
+                    <div>Waiting for activity...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-box">
+                <div class="info-icon">💳</div>
+                <div class="info-title">Card Reader</div>
+                <div id="card-reader-status" class="info-value disconnected">Checking...</div>
+            </div>
+            
+            <div class="info-box">
+                <div class="info-icon">🔌</div>
+                <div class="info-title">LabJack U3</div>
+                <div id="labjack-status" class="info-value disconnected">Checking...</div>
+            </div>
+            
+            <div class="info-box">
+                <div class="info-icon">👥</div>
+                <div class="info-title">Active Users</div>
+                <div id="user-count" class="info-value">Loading...</div>
+            </div>
+            
+            <div class="info-box">
+                <div class="info-icon">⏱️</div>
+                <div class="info-title">Uptime</div>
+                <div id="uptime" class="info-value">Calculating...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin login modal -->
+    <div id="admin-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: rgba(44, 44, 44, 0.95); border-radius: 20px; padding: 40px; backdrop-filter: blur(10px); border: 2px solid #666; text-align: center; color: white; max-width: 400px; width: 90%;">
+            <h3>Admin Access</h3>
+            <p>Enter admin password:</p>
+            <input type="password" id="admin-password" placeholder="Password" style="width: 100%; padding: 15px; margin: 15px 0; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 1.2em; border: 2px solid #666;">
+            <br>
+            <button onclick="adminLogin()" style="padding: 15px 30px; margin: 10px; border: none; border-radius: 12px; background: rgba(40, 167, 69, 0.7); color: white; cursor: pointer; border: 2px solid rgba(40, 167, 69, 0.9); font-size: 1.1em; font-weight: bold;">Login</button>
+            <button onclick="hideAdminLogin()" style="padding: 15px 30px; margin: 10px; border: none; border-radius: 12px; background: rgba(220, 53, 69, 0.7); color: white; cursor: pointer; border: 2px solid rgba(220, 53, 69, 0.9); font-size: 1.1em; font-weight: bold;">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        let isAdminLoggedIn = false;
+        let startTime = Date.now();
+
+        // Check authentication status
+        function checkAuthStatus() {
+            fetch('/api/auth-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.authenticated && data.role === 'admin') {
+                        isAdminLoggedIn = true;
+                        document.getElementById('admin-login-btn').style.display = 'none';
+                        document.getElementById('admin-dashboard').style.display = 'inline-block';
+                    } else {
+                        isAdminLoggedIn = false;
+                        document.getElementById('admin-login-btn').style.display = 'inline-block';
+                        document.getElementById('admin-dashboard').style.display = 'none';
+                    }
+                })
+                .catch(error => console.log('Auth check failed:', error));
+        }
+
+        // Check system status
+        function checkSystemStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateShearStatus(data.shear);
+                    updateDeviceStatus(data);
+                })
+                .catch(error => console.log('Status check failed:', error));
+        }
+
+        // Update shear status display
+        function updateShearStatus(shearData) {
+            const icon = document.getElementById('shear-icon');
+            const text = document.getElementById('status-text');
+            const details = document.getElementById('status-details');
+            const lockBtn = document.getElementById('manual-lock-btn');
+
+            if (shearData.unlocked) {
+                const userName = shearData.unlock_user?.name || 'Unknown User';
+                icon.textContent = '🔓';
+                icon.className = 'shear-status unlocked';
+                text.textContent = `Shear Unlocked`;
+                details.textContent = `In use by ${userName}`;
+                lockBtn.style.display = 'block';
+
+                // Show timeout if applicable
+                const remaining = Math.floor(shearData.timeout_remaining);
+                if (remaining <= 30 && remaining > 0) {
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    details.textContent += ` - Auto-lock in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            } else {
+                icon.textContent = '🔒';
+                icon.className = 'shear-status locked';
+                text.textContent = 'Shear is Locked';
+                details.textContent = 'Waiting for badge scan';
+                lockBtn.style.display = 'none';
+            }
+        }
+
+        // Update device status
+        function updateDeviceStatus(data) {
+            // Card reader status
+            const cardStatus = document.getElementById('card-reader-status');
+            if (data.card_reader.connected) {
+                cardStatus.textContent = 'Connected';
+                cardStatus.className = 'info-value connected';
+            } else {
+                cardStatus.textContent = 'Disconnected';
+                cardStatus.className = 'info-value disconnected';
+            }
+
+            // LabJack status
+            const labjackStatus = document.getElementById('labjack-status');
+            if (data.labjack_u3.connected) {
+                labjackStatus.textContent = 'Connected';
+                labjackStatus.className = 'info-value connected';
+            } else {
+                labjackStatus.textContent = 'Disconnected';
+                labjackStatus.className = 'info-value disconnected';
+            }
+        }
+
+        // Load user count
+        function loadUserCount() {
+            fetch('/api/users')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('user-count').textContent = data.users.length;
+                    }
+                })
+                .catch(error => console.log('User count failed:', error));
+        }
+
+        // Update uptime
+        function updateUptime() {
+            const now = Date.now();
+            const uptimeMs = now - startTime;
+            const hours = Math.floor(uptimeMs / (1000 * 60 * 60));
+            const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('uptime').textContent = `${hours}h ${minutes}m`;
+        }
+
+        // Load activity logs
+        function loadActivityLogs() {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.logs.length > 0) {
+                        const logContainer = document.getElementById('activity-log');
+                        const recentLogs = data.logs.slice(-10).reverse(); // Show last 10, newest first
+                        
+                        logContainer.innerHTML = recentLogs.map(log => {
+                            let logClass = 'log-entry';
+                            if (log.message.toLowerCase().includes('unlock') || log.message.toLowerCase().includes('access granted')) {
+                                logClass += ' success';
+                            } else if (log.message.toLowerCase().includes('denied') || log.message.toLowerCase().includes('error')) {
+                                logClass += ' error';
+                            } else if (log.message.toLowerCase().includes('pending') || log.message.toLowerCase().includes('timeout')) {
+                                logClass += ' warning';
+                            }
+                            
+                            return `
+                                <div class="${logClass}">
+                                    <div class="timestamp">${log.timestamp}</div>
+                                    <div>${log.message}</div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                })
+                .catch(error => console.log('Logs failed:', error));
+        }
+
+        // Manual lock function
+        function manualLock() {
+            fetch('/api/manual-lock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Shear locked manually');
+                } else {
+                    alert('Failed to lock shear: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error locking shear:', error);
+                alert('Error locking shear');
+            });
+        }
+
+        // Admin login functions
+        function showAdminLogin() {
+            document.getElementById('admin-modal').style.display = 'flex';
+            document.getElementById('admin-password').focus();
+        }
+
+        function hideAdminLogin() {
+            document.getElementById('admin-modal').style.display = 'none';
+            document.getElementById('admin-password').value = '';
+        }
+
+        function adminLogin() {
+            const password = document.getElementById('admin-password').value;
+            
+            fetch('/api/admin-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    hideAdminLogin();
+                    window.location.href = '/admin';
+                } else {
+                    alert('Invalid password');
+                    document.getElementById('admin-password').value = '';
+                    document.getElementById('admin-password').focus();
+                }
+            })
+            .catch(error => {
+                alert('Login error: ' + error.message);
+                document.getElementById('admin-password').value = '';
+            });
+        }
+
+        // Handle Enter key in password field
+        document.addEventListener('DOMContentLoaded', function() {
+            const passwordField = document.getElementById('admin-password');
+            if (passwordField) {
+                passwordField.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        adminLogin();
+                    }
+                });
+            }
+        });
+
+        // Initialize dashboard
+        function initDashboard() {
+            checkAuthStatus();
+            checkSystemStatus();
+            loadUserCount();
+            loadActivityLogs();
+            updateUptime();
+
+            // Set up periodic updates
+            setInterval(checkSystemStatus, 2000);      // Status every 2 seconds
+            setInterval(loadActivityLogs, 5000);       // Logs every 5 seconds
+            setInterval(updateUptime, 30000);          // Uptime every 30 seconds
+            setInterval(loadUserCount, 30000);         // User count every 30 seconds
+        }
+
+        // Start the dashboard
+        initDashboard();
+    </script>
+</body>
+</html>

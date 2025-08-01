@@ -45,9 +45,6 @@
             padding: 20px;
             text-align: center;
             border-bottom: 3px solid #444;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
         .title {
@@ -56,83 +53,6 @@
             margin: 0;
             color: #ffffff;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            flex: 1;
-        }
-        
-        /* Admin access gear */
-        .admin-access {
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 24px;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            min-width: 44px;
-            min-height: 44px;
-            color: #cccccc;
-        }
-        
-        .admin-access:hover, .admin-access:active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-            border-color: rgba(255, 255, 255, 0.5);
-            color: #ffffff;
-        }
-        
-        /* Admin logged in state - green gear */
-        .admin-access.logged-in {
-            background: rgba(40, 167, 69, 0.3);
-            border-color: rgba(40, 167, 69, 0.7);
-            color: #28a745;
-        }
-        
-        .admin-access.logged-in:hover, .admin-access.logged-in:active {
-            background: rgba(40, 167, 69, 0.5);
-            border-color: rgba(40, 167, 69, 0.9);
-            color: #ffffff;
-        }
-        
-        /* Key icon for card authentication */
-        .key-access {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 40px;
-            height: 40px;
-            background: rgba(128, 128, 128, 0.1);
-            border: 2px solid rgba(128, 128, 128, 0.3);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            min-width: 36px;
-            min-height: 36px;
-            color: #888888;
-            cursor: not-allowed;
-        }
-        
-        /* Key active state - only when logged in with card */
-        .key-access.active {
-            background: rgba(40, 167, 69, 0.3);
-            border-color: rgba(40, 167, 69, 0.7);
-            color: #28a745;
-            cursor: pointer;
-        }
-        
-        .key-access.active:hover, .key-access.active:active {
-            background: rgba(40, 167, 69, 0.5);
-            border-color: rgba(40, 167, 69, 0.9);
-            color: #ffffff;
-            transform: scale(1.1);
         }
         
         /* Admin panel styles */
@@ -353,16 +273,9 @@
 </head>
 <body>
     <!-- Default to LOCKED STATE for now - you can modify this based on your Flask logic -->
-    <!-- Key icon for card authentication (top left) -->
-    <div id="key-access" class="key-access" onclick="keyAccess()" title="Card Access - Disabled">
-        🔑
-    </div>
     
     <div class="header">
         <h1 class="title">Shear Access</h1>
-        <div id="admin-access" class="admin-access" onclick="showAdminAccess()" title="Admin Access">
-            ⚙️
-        </div>
     </div>
 
     <div class="container">
@@ -377,18 +290,6 @@
 
     <div class="footer">
         <p class="footer-label">Waiting for badge scan…</p>
-    </div>
-
-    <!-- Hidden admin access panel -->
-    <div id="admin-panel" class="admin-panel" style="display: none;">
-        <div class="admin-panel-content">
-            <h3>Admin Access</h3>
-            <p>Enter admin password:</p>
-            <input type="password" id="admin-password" placeholder="Password">
-            <br>
-            <button onclick="adminLogin()">Login</button>
-            <button class="cancel" onclick="hideAdminAccess()">Cancel</button>
-        </div>
     </div>
 
     <!-- Access request modal -->
@@ -440,28 +341,56 @@
     </div>
 
     <script>
-        // Authentication state management
-        let isAdminLoggedIn = false;
-        let isCardLoggedIn = false;
+        // Device detection for tablet-only interface
+        function isTabletDevice() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            // More precise mobile/tablet detection
+            const isMobilePhone = /android.*mobile|iphone|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+            const isTablet = /ipad|android(?!.*mobile)|tablet/i.test(userAgent);
+            
+            // Check for touch capability as additional indicator
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            // Screen size checks - be more conservative
+            const screenWidth = window.screen ? window.screen.width : window.innerWidth;
+            const screenHeight = window.screen ? window.screen.height : window.innerHeight;
+            const isTabletSize = (screenWidth >= 768 && screenWidth <= 1366) && hasTouch;
+            
+            // Final determination - must be explicit mobile/tablet OR have tablet size WITH touch
+            const isTabletDevice = isTablet || isMobilePhone || (isTabletSize && hasTouch);
+            
+            console.log('Device detection:', {
+                userAgent: userAgent,
+                isMobilePhone: isMobilePhone,
+                isTablet: isTablet,
+                hasTouch: hasTouch,
+                screenWidth: screenWidth,
+                screenHeight: screenHeight,
+                isTabletSize: isTabletSize,
+                finalResult: isTabletDevice
+            });
+            
+            return isTabletDevice;
+        }
+        
+        // Redirect desktop users to the dashboard
+        if (!isTabletDevice()) {
+            console.log('Desktop detected - redirecting to dashboard');
+            window.location.href = '/desktop';
+        }
+        
+        // Authentication state management (simplified for tablet-only)
         let userRole = null;
         
-        // Check authentication status on page load
+        // Check authentication status on page load (simplified for tablet)
         function checkAuthStatus() {
             fetch('/api/auth-status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.authenticated) {
                         userRole = data.role;
-                        if (data.login_method === 'password' && data.role === 'admin') {
-                            setAdminLoggedIn(true);
-                        } else if (data.login_method === 'card') {
-                            // All card access levels (admin, manager, user) should unlock shear
-                            // But only admin and manager get key button access
-                            if (data.role === 'admin' || data.role === 'manager') {
-                                setCardLoggedIn(true, data.role);
-                            }
-                            // For user level, we don't show key button but shear should still unlock
-                        }
+                        // Tablet doesn't need to show admin/key buttons
                     }
                 })
                 .catch(error => {
@@ -536,86 +465,9 @@
             });
         }
         
-        // Set admin logged in state (password login)
-        function setAdminLoggedIn(loggedIn) {
-            isAdminLoggedIn = loggedIn;
-            const adminGear = document.getElementById('admin-access');
-            if (loggedIn) {
-                adminGear.classList.add('logged-in');
-                adminGear.title = 'Admin Access - Logged In (Click to go to Dashboard)';
-            } else {
-                adminGear.classList.remove('logged-in');
-                adminGear.title = 'Admin Access';
-            }
-        }
-        
-        // Set card logged in state (card login)
-        function setCardLoggedIn(loggedIn, role) {
-            isCardLoggedIn = loggedIn;
-            userRole = role;
-            const keyIcon = document.getElementById('key-access');
-            if (loggedIn && (role === 'admin' || role === 'manager')) {
-                keyIcon.classList.add('active');
-                keyIcon.title = `Card Access - ${role.charAt(0).toUpperCase() + role.slice(1)} (Click to go to Dashboard)`;
-                keyIcon.style.cursor = 'pointer';
-            } else {
-                keyIcon.classList.remove('active');
-                keyIcon.title = 'Card Access - Disabled';
-                keyIcon.style.cursor = 'not-allowed';
-            }
-        }
-        
-        // Key access function
-        function keyAccess() {
-            if (isCardLoggedIn && (userRole === 'admin' || userRole === 'manager')) {
-                // Redirect based on role
-                if (userRole === 'admin') {
-                    window.location.href = '/admin';
-                } else if (userRole === 'manager') {
-                    window.location.href = '/manager';
-                }
-            }
-            // If not logged in with card, do nothing (icon is disabled)
-        }
-        
-        function adminLogin() {
-            const password = document.getElementById('admin-password').value;
-            
-            fetch('/api/admin-login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ password: password })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Set admin logged in state
-                    setAdminLoggedIn(true);
-                    // Hide admin panel
-                    hideAdminAccess();
-                    // Admin login successful - redirect to admin dashboard
-                    window.location.href = '/admin';
-                } else {
-                    alert('Invalid password');
-                    document.getElementById('admin-password').value = '';
-                    document.getElementById('admin-password').focus();
-                }
-            })
-            .catch(error => {
-                alert('Login error: ' + error.message);
-                document.getElementById('admin-password').value = '';
-            });
-        }
-        
-        // Handle Enter key in admin password field
+        // Handle Enter key for future use
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('admin-password').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    adminLogin();
-                }
-            });
+            // Future event handlers can be added here
         });
 
         // SSE handles all real-time updates - no polling needed for tablets
@@ -651,6 +503,12 @@
                             lastKnownStatus = data.status;
                             // Handle the card scan
                             handleCardScanResult(data);
+                        } else if (data.type === 'status_change') {
+                            console.log('Received status change event via SSE:', data);
+                            // Immediately update shear status display
+                            setTimeout(() => {
+                                checkShearStatus();
+                            }, 100); // Small delay to ensure backend state is consistent
                         } else if (data.type === 'heartbeat') {
                             console.log('SSE heartbeat received');
                         }
@@ -695,39 +553,6 @@
         let lastKnownCard = null;
         let lastKnownStatus = null;
         let requestModalShown = false; // Flag to prevent duplicate modals
-        
-        // Check if this is a tablet device
-        function isTabletDevice() {
-            const userAgent = navigator.userAgent.toLowerCase();
-            
-            // More precise mobile/tablet detection
-            const isMobilePhone = /android.*mobile|iphone|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-            const isTablet = /ipad|android(?!.*mobile)|tablet/i.test(userAgent);
-            
-            // Check for touch capability as additional indicator
-            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-            
-            // Screen size checks - be more conservative
-            const screenWidth = window.screen ? window.screen.width : window.innerWidth;
-            const screenHeight = window.screen ? window.screen.height : window.innerHeight;
-            const isTabletSize = (screenWidth >= 768 && screenWidth <= 1366) && hasTouch;
-            
-            // Final determination - must be explicit mobile/tablet OR have tablet size WITH touch
-            const isTabletDevice = isTablet || isMobilePhone || (isTabletSize && hasTouch);
-            
-            console.log('Device detection:', {
-                userAgent: userAgent,
-                isMobilePhone: isMobilePhone,
-                isTablet: isTablet,
-                hasTouch: hasTouch,
-                screenWidth: screenWidth,
-                screenHeight: screenHeight,
-                isTabletSize: isTabletSize,
-                finalResult: isTabletDevice
-            });
-            
-            return isTabletDevice;
-        }
         
         // Handle card scan results from SSE events
         function handleCardScanResult(data) {
@@ -859,33 +684,8 @@
             }, 5000);
         }
         
-        // Stop SSE when admin panel opens (tablet uses SSE-only)
-        function showAdminAccess() {
-            // If admin is already logged in, bypass login and go directly to dashboard
-            if (isAdminLoggedIn) {
-                window.location.href = '/admin';
-                return;
-            }
-            
-            // Close SSE connection while admin panel is open
-            if (cardEventSource) {
-                cardEventSource.close();
-                cardEventSource = null;
-                console.log('SSE connection closed for admin panel');
-            }
-            document.getElementById('admin-panel').style.display = 'flex';
-            document.getElementById('admin-password').focus();
-        }
-        
-        // Resume SSE events when admin panel closes (tablet uses SSE-only)
-        function hideAdminAccess() {
-            document.getElementById('admin-panel').style.display = 'none';
-            document.getElementById('admin-password').value = '';
-            
-            // Restart SSE connection only - no polling for tablets
-            console.log('Restarting SSE connection after admin panel close');
-            setupCardScanEvents();
-        }
+        // Start SSE connection
+        setupCardScanEvents();
         
         // Access Request Functions
         function showAccessRequestModal(cardId) {

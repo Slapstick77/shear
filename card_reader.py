@@ -223,32 +223,42 @@ class CardReader:
             # Create hex string from buffer
             hex_data = ''.join([f"{b:02x}" for b in self.card_buffer]).upper()
             
-            # Extract different ID formats
+            # CONSISTENT PARSING: Always convert raw bytes to a numeric ID for consistency
+            # This ensures all cards get the same treatment regardless of ASCII content
+            
+            # Method 1: Convert raw bytes to a decimal number (most consistent)
+            raw_int = 0
+            for i, byte in enumerate(self.card_buffer):
+                raw_int = (raw_int << 8) | byte
+            
+            # Use the decimal representation as card ID
+            card_id = str(raw_int)
+            id_type = "numeric_consistent"
+            
+            # Keep the other formats for debugging/logging purposes
             full_hex = hex_data
             ascii_data = ''.join([chr(b) for b in self.card_buffer if 32 <= b <= 126])
             numeric_data = ''.join([chr(b) for b in self.card_buffer if 48 <= b <= 57])
+            filtered_ascii = ''.join([c for c in ascii_data if c.isalnum() or c.isspace()]).strip()
             
-            # CONSISTENT ID SELECTION: Prefer numeric if available, otherwise ASCII, finally hex
-            if numeric_data and len(numeric_data) >= 4:
-                card_id = numeric_data
-                id_type = "numeric"
-            elif ascii_data and len(ascii_data) >= 4:
-                card_id = ascii_data.strip()
-                id_type = "ascii"
-            else:
-                card_id = full_hex
-                id_type = "hex"
-            
-            logger.info(f"Card processed - Selected ID: {card_id} (type: {id_type}), Full hex: {full_hex}, ASCII: '{ascii_data}', Numeric: '{numeric_data}'")
+            logger.info(f"Card processed - Consistent Numeric ID: {card_id} (type: {id_type}), Full hex: {full_hex}, ASCII: '{ascii_data}', Raw bytes: {list(self.card_buffer)}")
             
             # Print card processing info to console
             print(f"[CARD READER] ========== CARD PROCESSED ==========")
-            print(f"[CARD READER] Selected Card ID: {card_id} (type: {id_type})")
+            print(f"[CARD READER] Consistent Card ID: {card_id} (type: {id_type})")
+            print(f"[CARD READER] Raw bytes: {list(self.card_buffer)}")
             print(f"[CARD READER] Full hex: {full_hex}")
-            print(f"[CARD READER] ASCII data: '{ascii_data}'")
-            print(f"[CARD READER] Numeric data: '{numeric_data}'")
+            print(f"[CARD READER] ASCII representation: '{ascii_data}'")
+            print(f"[CARD READER] Filtered ASCII: '{filtered_ascii}'")
+            print(f"[CARD READER] Legacy numeric: '{numeric_data}'")
             print(f"[CARD READER] Buffer length: {len(self.card_buffer)} bytes")
             print(f"[CARD READER] =====================================")
+            
+            # Only reject cards that are completely empty or zero
+            if not card_id or card_id == '0':
+                print(f"[CARD READER] EMPTY/ZERO CARD DATA - Rejecting card ID: '{card_id}'")
+                logger.warning(f"Empty or zero card data rejected: '{card_id}' - no usable data")
+                return None
             
             # Check for duplicate card reads to prevent double processing
             current_time = time.time()
@@ -261,8 +271,10 @@ class CardReader:
             card_result = {
                 'card_id': card_id,
                 'raw_data': full_hex,
+                'raw_bytes': list(self.card_buffer),  # Include raw bytes for debugging
                 'ascii_data': ascii_data,
-                'numeric_data': numeric_data,
+                'filtered_ascii': filtered_ascii,
+                'numeric_data': numeric_data,  # Legacy numeric extraction for comparison
                 'facility_code': None,  # RDR-6081AKU doesn't typically separate facility code
                 'card_number': None,
                 'timestamp': time.time(),

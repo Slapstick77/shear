@@ -758,7 +758,12 @@
                 fetch(`/api/users/${cardId}`, {
                     method: 'DELETE'
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         alert('User removed successfully');
@@ -768,7 +773,12 @@
                     }
                 })
                 .catch(error => {
+                    console.error('Remove user error:', error);
                     alert('Error removing user: ' + error.message);
+                    // Still reload users in case the deletion actually worked
+                    setTimeout(() => {
+                        loadUsers();
+                    }, 1000);
                 });
             }
         }

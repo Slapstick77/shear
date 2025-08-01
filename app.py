@@ -218,6 +218,16 @@ def unlock_shear(card_id, user_info=None):
         shear_unlock_user = user_info or {}
         logger.info(f"Shear unlocked for card: {card_id}")
         
+        # Broadcast status change via SSE
+        status_event = {
+            'type': 'status_change',
+            'shear_unlocked': True,
+            'unlock_user': user_info,
+            'timestamp': datetime.now().isoformat()
+        }
+        card_scan_events.append(status_event)
+        logger.info(f"Pushed shear unlock status event to SSE queue")
+        
         # Start timeout timer
         start_shear_timeout_timer()
         
@@ -243,6 +253,16 @@ def lock_shear():
         shear_unlock_timestamp = None
         shear_unlock_user = None
         logger.info("Shear locked due to timeout")
+        
+        # Broadcast status change via SSE
+        status_event = {
+            'type': 'status_change',
+            'shear_unlocked': False,
+            'unlock_user': None,
+            'timestamp': datetime.now().isoformat()
+        }
+        card_scan_events.append(status_event)
+        logger.info(f"Pushed shear lock status event to SSE queue")
         
         # Add to session logs
         log_entry = {
@@ -328,8 +348,8 @@ def operating():
 
 @app.route('/desktop')
 def desktop_status():
-    """Simple desktop status display (no SSE conflicts)"""
-    return render_template('desktop_status.html')
+    """Desktop dashboard for monitoring and administration"""
+    return render_template('desktop_dashboard.html')
 
 @app.route('/technical')
 def technical():
