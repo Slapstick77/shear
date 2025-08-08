@@ -30,11 +30,18 @@ def init_db():
                 name TEXT NOT NULL,
                 access_level TEXT DEFAULT 'user',
                 department TEXT DEFAULT '',
+                shift TEXT DEFAULT '',
                 status TEXT DEFAULT 'active',
                 created_date TEXT DEFAULT CURRENT_TIMESTAMP,
                 last_access TEXT
             )
         ''')
+        
+        # Add shift column if it doesn't exist (for existing databases)
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN shift TEXT DEFAULT ""')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Create pending_requests table
         cursor.execute('''
@@ -90,16 +97,16 @@ def reset_database():
         logger.error(f"Error resetting database: {e}")
         raise
 
-def add_user(card_id: str, name: str, access_level: str = 'user', department: str = '', status: str = 'active') -> bool:
+def add_user(card_id: str, name: str, access_level: str = 'user', department: str = '', shift: str = '', status: str = 'active') -> bool:
     """Add a new user to the database"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO users (card_id, name, access_level, department, status)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (card_id, name, access_level, department, status))
+            INSERT INTO users (card_id, name, access_level, department, shift, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (card_id, name, access_level, department, shift, status))
         
         conn.commit()
         conn.close()
@@ -121,37 +128,39 @@ def get_user(card_id: str) -> Optional[Dict[str, Any]]:
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM users WHERE card_id = ?', (card_id,))
+        cursor.execute('''
+            SELECT card_id, name, access_level, department, shift, status, created_date, last_access
+            FROM users WHERE card_id = ?
+        ''', (card_id,))
         row = cursor.fetchone()
         conn.close()
-        
         if row:
             return {
                 'card_id': row[0],
                 'name': row[1],
                 'access_level': row[2],
                 'department': row[3],
-                'status': row[4],
-                'created_date': row[5],
-                'last_access': row[6]
+                'shift': row[4],
+                'status': row[5],
+                'created_date': row[6],
+                'last_access': row[7]
             }
         return None
-        
     except Exception as e:
         logger.error(f"Error getting user: {e}")
         return None
 
 def get_all_users() -> List[Dict[str, Any]]:
-    """Get all users"""
+    """Get all users (explicit column order for stability)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM users ORDER BY name')
+        cursor.execute('''
+            SELECT card_id, name, access_level, department, shift, status, created_date, last_access
+            FROM users ORDER BY name
+        ''')
         rows = cursor.fetchall()
         conn.close()
-        
         users = []
         for row in rows:
             users.append({
@@ -159,26 +168,26 @@ def get_all_users() -> List[Dict[str, Any]]:
                 'name': row[1],
                 'access_level': row[2],
                 'department': row[3],
-                'status': row[4],
-                'created_date': row[5],
-                'last_access': row[6]
+                'shift': row[4],
+                'status': row[5],
+                'created_date': row[6],
+                'last_access': row[7]
             })
         return users
-        
     except Exception as e:
         logger.error(f"Error getting all users: {e}")
         return []
 
-def update_user(card_id: str, name: str, access_level: str, department: str, status: str) -> bool:
+def update_user(card_id: str, name: str, access_level: str, department: str, shift: str, status: str) -> bool:
     """Update user information"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-            UPDATE users SET name = ?, access_level = ?, department = ?, status = ?
+            UPDATE users SET name = ?, access_level = ?, department = ?, shift = ?, status = ?
             WHERE card_id = ?
-        ''', (name, access_level, department, status, card_id))
+        ''', (name, access_level, department, shift, status, card_id))
         
         conn.commit()
         conn.close()
@@ -443,21 +452,19 @@ def log_scan_event(card_id: str, result: str = 'unknown') -> bool:
         return False
 
 def search_users(query: str) -> List[Dict[str, Any]]:
-    """Search users by name, card ID, or department"""
+    """Search users by name, card ID, or department (explicit columns)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
         search_pattern = f'%{query}%'
         cursor.execute('''
-            SELECT * FROM users 
+            SELECT card_id, name, access_level, department, shift, status, created_date, last_access
+            FROM users
             WHERE card_id LIKE ? OR name LIKE ? OR department LIKE ?
             ORDER BY name
         ''', (search_pattern, search_pattern, search_pattern))
-        
         rows = cursor.fetchall()
         conn.close()
-        
         users = []
         for row in rows:
             users.append({
@@ -465,12 +472,12 @@ def search_users(query: str) -> List[Dict[str, Any]]:
                 'name': row[1],
                 'access_level': row[2],
                 'department': row[3],
-                'status': row[4],
-                'created_date': row[5],
-                'last_access': row[6]
+                'shift': row[4],
+                'status': row[5],
+                'created_date': row[6],
+                'last_access': row[7]
             })
         return users
-        
     except Exception as e:
         logger.error(f"Error searching users: {e}")
         return []

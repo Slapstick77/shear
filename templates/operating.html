@@ -324,6 +324,37 @@
                 margin: 20px 0;
             }
         }
+
+        /* Toast notifications */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(40, 167, 69, 0.95);
+            color: #fff;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: clamp(1em, 2.5vw, 1.2em);
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            min-width: 220px;
+            text-align: center;
+            animation: fadeInScale .25s ease-out;
+        }
+        .toast.error { background: rgba(220, 53, 69, 0.95); }
+        .toast.info { background: rgba(0, 123, 255, 0.95); }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: translateX(-50%) scale(.9); }
+            to { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -352,6 +383,8 @@
     <div class="footer">
         <p class="footer-label">Waiting for badge scan…</p>
     </div>
+
+    <div id="toast-container"></div>
 
     <!-- Access request modal -->
     <div id="access-request-modal" class="admin-panel" style="display: none;">
@@ -744,28 +777,22 @@
         
         // Show temporary message to user
         function showMessage(message) {
-            console.log('Message:', message);
-            
-            // Create a temporary modal to show the message
-            const messageModal = document.createElement('div');
-            messageModal.className = 'admin-panel';
-            messageModal.style.display = 'flex';
-            messageModal.innerHTML = `
-                <div class="admin-panel-content">
-                    <h3>📋 Status Update</h3>
-                    <p>${message}</p>
-                    <button onclick="this.closest('.admin-panel').remove()" class="access-btn">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(messageModal);
-            
-            // Auto-remove after 5 seconds
+            // Convert existing calls seamlessly to toast notifications
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            // Auto dismiss after 2 seconds
             setTimeout(() => {
-                if (messageModal.parentNode) {
-                    messageModal.remove();
-                }
-            }, 5000);
+                toast.style.transition = 'opacity .4s ease, transform .4s ease';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) scale(.92)';
+                setTimeout(() => toast.remove(), 400);
+            }, 2000);
         }
         
         // Start SSE connection
@@ -823,17 +850,17 @@
             
             // Validate all fields are filled
             if (!firstName || !lastName) {
-                alert('Please enter both first and last name');
+                showMessage('Please enter both first and last name');
                 return;
             }
             
             if (!department) {
-                alert('Please select a department');
+                showMessage('Please select a department');
                 return;
             }
             
             if (!shift) {
-                alert('Please select a shift');
+                showMessage('Please select a shift');
                 return;
             }
             
@@ -853,18 +880,18 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Access request submitted successfully! Please wait for approval from management.');
+                    showMessage('Request sent - Awaiting approval');
                     hideAccessRequestForm();
                     requestModalShown = false; // Reset flag after successful submission
                     // Reset the card tracking so the status will be rechecked
                     lastKnownStatus = null;
                 } else {
-                    alert('Error submitting request: ' + data.message);
+                    showMessage('Error submitting request: ' + data.message);
                 }
             })
             .catch(error => {
                 console.error('Error submitting access request:', error);
-                alert('Error submitting access request');
+                showMessage('Error submitting access request');
             });
         }
         

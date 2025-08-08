@@ -3,7 +3,7 @@
 # Shear App Setup Script
 
 echo "🔐 Shear App - Setup Script"
-echo "Setting up USB HID Card Reader + LabJack T7 Access Control System"
+echo "Setting up USB HID Card Reader + LabJack U3 Access Control System"
 echo ""
 
 # Check if Python 3 is installed

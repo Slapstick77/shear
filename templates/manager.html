@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manager Dashboard - Shear System</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='8' ry='8' fill='%23007bff'/><text x='50%' y='55%' font-size='30' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>M</text></svg>">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -274,6 +275,124 @@
         .nav-btn.has-notifications .notification-dot {
             display: block;
         }
+        
+        /* Toast notification styles */
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(44, 44, 44, 0.95);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            min-width: 300px;
+            border: 2px solid #28a745;
+            backdrop-filter: blur(10px);
+            animation: toastSlideIn 0.3s ease-out;
+        }
+        
+        .toast.error {
+            border-color: #dc3545;
+            background: rgba(220, 53, 69, 0.95);
+        }
+        
+        .toast.success {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.95);
+        }
+        
+        @keyframes toastSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+        
+        /* Confirmation modal styles */
+        .confirm-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            backdrop-filter: blur(5px);
+        }
+        
+        .confirm-modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 2px solid #ddd;
+        }
+        
+        .confirm-modal h3 {
+            margin: 0 0 15px 0;
+            color: #dc3545;
+            font-size: 20px;
+        }
+        
+        .confirm-modal p {
+            margin: 0 0 25px 0;
+            color: #333;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        
+        .confirm-modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .confirm-modal-buttons button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            min-width: 100px;
+            transition: all 0.3s ease;
+        }
+        
+        .confirm-modal-buttons .btn-confirm {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .confirm-modal-buttons .btn-confirm:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+        
+        .confirm-modal-buttons .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .confirm-modal-buttons .btn-cancel:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -308,22 +427,62 @@
                 </div>
             </div>
             
+            <!-- Edit User Modal -->
+            <div id="edit-user-modal" class="confirm-modal" style="display: none;">
+                <div class="confirm-modal-content" style="max-width: 500px;">
+                    <h3>✏️ Edit User</h3>
+                    <form id="edit-user-form">
+                        <div style="margin: 15px 0;">
+                            <label for="edit-card-id" style="display: block; margin-bottom: 5px;">Card ID:</label>
+                            <input type="text" id="edit-card-id" readonly style="background: #f5f5f5; width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-user-name" style="display: block; margin-bottom: 5px;">Name:</label>
+                            <input type="text" id="edit-user-name" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; margin-bottom: 5px;">Access Level:</label>
+                            <input type="text" id="edit-access-level-display" readonly value="User" style="background: #f5f5f5; width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                            <small style="color: #666;">Note: Managers can only edit user-level accounts. Contact admin to change access levels.</small>
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-department" style="display: block; margin-bottom: 5px;">Department:</label>
+                            <select id="edit-department" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">Select Department</option>
+                                <option value="Sheet Shop">Sheet Shop</option>
+                                <option value="Base Shop">Base Shop</option>
+                                <option value="Electric Shop">Electric Shop</option>
+                                <option value="Assembly">Assembly</option>
+                                <option value="Door Shop">Door Shop</option>
+                                <option value="QA">QA</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Management">Management</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-shift" style="display: block; margin-bottom: 5px;">Shift:</label>
+                            <select id="edit-shift" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="" disabled>Select Shift</option>
+                                <option value="First">First</option>
+                                <option value="Second">Second</option>
+                                <option value="Third">Third</option>
+                            </select>
+                        </div>
+                    </form>
+                    <div class="confirm-modal-buttons" style="margin-top: 25px;">
+                        <button class="btn-confirm" onclick="saveUserChanges()">Save Changes</button>
+                        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Access Requests Section -->
             <div id="requests" class="section">
                 <div class="card">
                     <h3>🆔 Card Registration & Access Requests</h3>
                     
-                    <!-- Auto Accept Toggle -->
-                    <div class="toggle-container">
-                        <label for="auto-accept-toggle">
-                            <strong>Auto Accept:</strong> Automatically grant User access to new card scans
-                        </label>
-                        <label class="toggle-switch" id="auto-accept-switch">
-                            <input type="checkbox" id="auto-accept-toggle" onchange="toggleAutoAccept()">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span id="auto-accept-status" style="font-size: 12px; color: #666;">Disabled</span>
-                    </div>
                     
                     <div style="margin-bottom: 10px;">
                         <button class="btn" onclick="loadAccessRequests()">Refresh Requests</button>
@@ -369,6 +528,14 @@
         // Get user role from session (this should be set by the server)
         let userRole = '{{ session.get("role", "manager") }}';
         
+        // Initialize page when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load initial data
+            loadUsers();
+            loadAccessRequests();
+            loadUsageStats();
+        });
+        
         function showSection(sectionName) {
             // Hide all sections
             document.querySelectorAll('.section').forEach(section => {
@@ -399,27 +566,69 @@
         }
         
         function loadUsers() {
-            fetch('/api/users')
-                .then(response => response.json())
+            const userList = document.getElementById('user-list');
+            if (!userList) return;
+            userList.innerHTML = '<div class="user-item"><div>Loading users...</div></div>';
+            console.log('[MANAGER] Loading users...');
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
+            fetch('/api/users', { signal: controller.signal })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json().catch(e => { throw new Error('Invalid JSON'); });
+                })
                 .then(data => {
-                    const userList = document.getElementById('user-list');
-                    if (data.success && data.users.length > 0) {
-                        userList.innerHTML = data.users.map(user => `
-                            <div class="user-item">
-                                <div>
-                                    <strong>${user.name}</strong><br>
-                                    <small>Card: ${user.card_id} | Level: ${user.access_level}</small>
-                                </div>
-                                <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
-                            </div>
-                        `).join('');
+                    console.log('[MANAGER] Users response:', data);
+                    if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+                        userList.innerHTML = `
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background-color: #f5f5f5;">
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Card ID</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Name</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Access Level</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Department</th>
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Shift</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.users.map(user => `
+                                        <tr data-card-id="${user.card_id}">
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.card_id}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.name}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.access_level}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.department || 'Not Set'}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd;">${user.shift || 'Not Set'}</td>
+                                            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; white-space: nowrap;">
+                                                ${user.access_level && user.access_level.toLowerCase() === 'user' ? 
+                                                    `<button class=\"btn\" onclick=\"editUser('${user.card_id}')\" style=\"margin-right: 5px; background-color: #007bff; color: white;\">Edit</button>
+                                                     <button class=\"btn danger\" onclick=\"confirmRemoveUser('${user.card_id}', '${user.name}', 'user')\">Remove</button>` : 
+                                                    `<span style=\"color: #666; font-size: 12px;\">(read-only)</span>`
+                                                }
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>`;
                     } else {
                         userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading users:', error);
-                    document.getElementById('user-list').innerHTML = '<div class="user-item"><div>Error loading users</div></div>';
+                    console.error('[MANAGER] Error loading users:', error);
+                    userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+                })
+                .finally(() => {
+                    clearTimeout(timeout);
+                    setTimeout(() => {
+                        if (userList.textContent.includes('Loading users')) {
+                            console.log('[MANAGER] Fallback triggered, replacing stuck loading state');
+                            userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+                        }
+                    }, 1000);
                 });
         }
         
@@ -461,34 +670,192 @@
                 });
         }
         
-        function removeUser(cardId) {
-            if (confirm('Are you sure you want to remove this user?')) {
-                fetch(`/api/users/${cardId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        alert('User removed successfully');
-                        loadUsers();
-                    } else {
-                        alert('Error removing user: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Remove user error:', error);
-                    alert('Error removing user: ' + error.message);
-                    // Still reload users in case the deletion actually worked
-                    setTimeout(() => {
-                        loadUsers();
-                    }, 1000);
-                });
+        function confirmRemoveUser(cardId, userName, accessLevel) {
+            if ((accessLevel || '').toLowerCase() !== 'user') {
+                showToast('Managers can only remove user-level accounts', 'error');
+                return;
             }
+            showConfirmModal(
+                'Remove User',
+                `Are you sure you want to remove ${userName} from the system?`,
+                () => removeUser(cardId)
+            );
+        }
+        
+        function removeUser(cardId) {
+            fetch(`/api/users/${cardId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showToast('User removed successfully', 'success');
+                    loadUsers();
+                } else {
+                    showToast('Error removing user: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error removing user:', error);
+                showToast('Error removing user', 'error');
+            });
+        }
+        
+        // Edit user functions
+        function editUser(cardId) {
+            console.log('[MANAGER] editUser called for', cardId);
+            let row = document.querySelector(`tr[data-card-id="${cardId}"]`);
+            if (!row) {
+                // Fallback: try without tr tag specificity
+                row = document.querySelector(`[data-card-id="${cardId}"]`);
+            }
+            if (!row) {
+                console.warn('[MANAGER] editUser: row not found for', cardId);
+                showToast('User row not found', 'error');
+                return;
+            }
+            const cells = row.cells;
+            if (!cells || cells.length < 5) {
+                console.warn('[MANAGER] editUser: unexpected cell count', cells && cells.length);
+                showToast('User row malformed', 'error');
+                return;
+            }
+            const name = cells[1].textContent.trim();
+            const accessLevel = cells[2].textContent.trim();
+            const department = cells[3].textContent.trim();
+            const shift = cells[4].textContent.trim();
+            console.log('[MANAGER] row data', {name, accessLevel, department, shift});
+            if (accessLevel.toLowerCase() !== 'user') {
+                showToast('Managers can only edit user-level accounts', 'error');
+                return;
+            }
+            const cardInput = document.getElementById('edit-card-id');
+            const nameInput = document.getElementById('edit-user-name');
+            const deptSelect = document.getElementById('edit-department');
+            const shiftSelect = document.getElementById('edit-shift');
+            if (!cardInput || !nameInput || !deptSelect || !shiftSelect) {
+                console.error('[MANAGER] editUser: missing form elements');
+                showToast('Edit form not ready', 'error');
+                return;
+            }
+            cardInput.value = cardId;
+            nameInput.value = name;
+            deptSelect.value = department || '';
+            if (shift) {
+                shiftSelect.value = shift;
+            } else {
+                // reset to placeholder (disabled) so user must pick
+                shiftSelect.selectedIndex = 0;
+            }
+            document.getElementById('edit-user-modal').style.display = 'flex';
+        }
+        
+        function closeEditModal() {
+            document.getElementById('edit-user-modal').style.display = 'none';
+        }
+        
+        function saveUserChanges() {
+            const cardId = document.getElementById('edit-card-id').value;
+            const shiftVal = document.getElementById('edit-shift').value.trim();
+            if (!shiftVal) {
+                showToast('Please choose a shift', 'error');
+                return;
+            }
+            const userData = {
+                user_name: document.getElementById('edit-user-name').value,
+                access_level: 'user', // Managers can only edit user-level accounts
+                department: document.getElementById('edit-department').value,
+                shift: shiftVal
+            };
+            
+            fetch(`/api/users/${cardId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(userData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('User updated successfully', 'success');
+                    closeEditModal();
+                    loadUsers();
+                } else {
+                    showToast('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error updating user', 'error');
+            });
+        }
+        
+        // Toast notification function
+        function showToast(message, type = 'success') {
+            // Remove any existing toasts
+            const existingToasts = document.querySelectorAll('.toast');
+            existingToasts.forEach(toast => toast.remove());
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            // Auto-remove after 2 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 2000);
+        }
+        
+        // Confirmation modal function
+        function showConfirmModal(title, message, onConfirm) {
+            // Remove any existing modals
+            const existingModals = document.querySelectorAll('.confirm-modal');
+            existingModals.forEach(modal => modal.remove());
+            
+            const modal = document.createElement('div');
+            modal.className = 'confirm-modal';
+            modal.innerHTML = `
+                <div class="confirm-modal-content">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="confirm-modal-buttons">
+                        <button class="btn-confirm">Yes, Remove</button>
+                        <button class="btn-cancel">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            // Add event listeners
+            const confirmBtn = modal.querySelector('.btn-confirm');
+            const cancelBtn = modal.querySelector('.btn-cancel');
+            
+            confirmBtn.addEventListener('click', () => {
+                modal.remove();
+                onConfirm();
+            });
+            
+            cancelBtn.addEventListener('click', () => {
+                modal.remove();
+            });
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
         }
         
         function refreshLogs() {
@@ -507,14 +874,14 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Logs cleared successfully');
+                        showToast('Logs cleared successfully', 'success');
                         loadLogs();
                     } else {
-                        alert('Error clearing logs: ' + data.message);
+                        showToast('Error clearing logs: ' + data.message, 'error');
                     }
                 })
                 .catch(error => {
-                    alert('Error clearing logs: ' + error.message);
+                    showToast('Error clearing logs: ' + error.message, 'error');
                 });
             }
         }
@@ -547,7 +914,20 @@
                                     </div>
                                     <div class="request-form">
                                         <input type="text" id="name-${request.card_id}" placeholder="Full Name" value="${displayName}" required>
-                                        <input type="text" id="dept-${request.card_id}" placeholder="Department (optional)" value="${request.department || ''}">
+                                        <select id="dept-${request.card_id}">
+                                            <option value="">Select Department</option>
+                                            <option value="Operations" ${request.department === 'Operations' ? 'selected' : ''}>Operations</option>
+                                            <option value="Maintenance" ${request.department === 'Maintenance' ? 'selected' : ''}>Maintenance</option>
+                                            <option value="Quality Control" ${request.department === 'Quality Control' ? 'selected' : ''}>Quality Control</option>
+                                            <option value="Engineering" ${request.department === 'Engineering' ? 'selected' : ''}>Engineering</option>
+                                            <option value="Administration" ${request.department === 'Administration' ? 'selected' : ''}>Administration</option>
+                                        </select>
+                                        <select id="shift-${request.card_id}">
+                                            <option value="" disabled>Select Shift</option>
+                                            <option value="First" ${request.shift === 'First' ? 'selected' : ''}>First</option>
+                                            <option value="Second" ${request.shift === 'Second' ? 'selected' : ''}>Second</option>
+                                            <option value="Third" ${request.shift === 'Third' ? 'selected' : ''}>Third</option>
+                                        </select>
                                         <select id="level-${request.card_id}">
                                             <option value="user">User Access</option>
                                             ${userRole === 'admin' ? '<option value="manager">Manager Access</option>' : ''}
@@ -590,10 +970,16 @@
             // Get form data
             const name = document.getElementById(`name-${cardId}`).value.trim();
             const department = document.getElementById(`dept-${cardId}`).value.trim();
+            const shift = document.getElementById(`shift-${cardId}`).value.trim();
             const accessLevel = document.getElementById(`level-${cardId}`).value;
             
             if (!name) {
-                alert('Please enter a name for this user');
+                showToast('Please enter a name for this user', 'error');
+                return;
+            }
+            
+            if (!shift) {
+                showToast('Please select a shift for this user', 'error');
                 return;
             }
             
@@ -606,110 +992,55 @@
                     card_id: cardId,
                     name: name,
                     department: department,
+                    shift: shift,
                     access_level: accessLevel 
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(data.message);
+                    showToast(data.message, 'success');
                     loadAccessRequests();
                     loadUsers(); // Refresh users list too
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('Error: ' + data.message, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error approving request:', error);
-                alert('Error approving request');
+                showToast('Error approving request', 'error');
             });
         }
         
         function denyRequest(cardId) {
-            if (confirm('Are you sure you want to deny this access request?')) {
-                fetch('/api/deny-request', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ card_id: cardId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        loadAccessRequests();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error denying request:', error);
-                    alert('Error denying request');
-                });
-            }
-        }
-        
-        // Auto Accept Toggle Functions
-        function toggleAutoAccept() {
-            const toggle = document.getElementById('auto-accept-toggle');
-            const status = document.getElementById('auto-accept-status');
-            
-            fetch('/api/auto-accept', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ enabled: toggle.checked })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    status.textContent = toggle.checked ? 'Enabled' : 'Disabled';
-                    status.style.color = toggle.checked ? '#28a745' : '#666';
-                    
-                    // Update notification dot if requests exist
-                    updateNotificationDot();
-                } else {
-                    alert('Error: ' + data.message);
-                    // Revert toggle state on error
-                    toggle.checked = !toggle.checked;
-                }
-            })
-            .catch(error => {
-                console.error('Error toggling auto-accept:', error);
-                alert('Error updating auto-accept setting');
-                // Revert toggle state on error
-                toggle.checked = !toggle.checked;
-            });
-        }
-        
-        function loadAutoAcceptState() {
-            fetch('/api/auto-accept')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const toggle = document.getElementById('auto-accept-toggle');
-                        const status = document.getElementById('auto-accept-status');
-                        const switchElement = document.getElementById('auto-accept-switch');
-                        
-                        toggle.checked = data.enabled;
-                        status.textContent = data.enabled ? 'Enabled' : 'Disabled';
-                        status.style.color = data.enabled ? '#28a745' : '#666';
-                        
-                        // Check user role and disable for managers
-                        if (data.user_role === 'manager') {
-                            switchElement.classList.add('disabled');
-                            toggle.disabled = true;
-                            status.textContent = 'Admin Only';
-                            status.style.color = '#999';
+            showConfirmModal(
+                'Deny Access Request',
+                'Are you sure you want to deny this access request?',
+                () => {
+                    fetch('/api/deny-request', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ card_id: cardId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(data.message, 'success');
+                            loadAccessRequests();
+                        } else {
+                            showToast('Error: ' + data.message, 'error');
                         }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading auto-accept state:', error);
-                });
+                    })
+                    .catch(error => {
+                        console.error('Error denying request:', error);
+                        showToast('Error denying request', 'error');
+                    });
+                }
+            );
         }
+        
         
         function updateNotificationDot() {
             fetch('/api/access-requests')
@@ -728,9 +1059,8 @@
         }
         
         // Load initial data
-        loadUsers();
-        loadAutoAcceptState();
-        updateNotificationDot();
+    loadUsers();
+    updateNotificationDot();
 
         // Mobile Detection and Fullscreen Functionality
         function isMobileDevice() {

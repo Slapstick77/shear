@@ -54,8 +54,18 @@ shear_unlock_timer = None
 shear_unlocked = False
 shear_unlock_timestamp = None
 shear_unlock_user = None
-pending_requests = []  # Store pending access requests
+shear_cycles = 0  # Track number of shear unlock cycles
 auto_accept_enabled = False  # Auto-accept setting for new card registrations
+
+# Output control modes - track manual/auto state for each output
+output_modes = {
+    'FIO6': 'auto',  # Shear control output
+    'FIO7': 'auto'   # Additional output
+}
+manual_output_states = {
+    'FIO6': False,  # Manual state when in manual mode
+    'FIO7': False   # Manual state when in manual mode
+}
 
 # System data for shifts and departments
 system_shifts = ["First", "Second", "Third"]
@@ -79,6 +89,42 @@ def datetime_filter(timestamp):
 card_reader = None
 labjack_u3 = None
 
+def migrate_legacy_json_data():
+    """Migrate legacy access_requests.json to SQL database if it exists"""
+    try:
+        legacy_file = 'access_requests.json'
+        if os.path.exists(legacy_file):
+            logger.info(f"Found legacy {legacy_file} - migrating to SQL database")
+            
+            with open(legacy_file, 'r') as f:
+                legacy_requests = json.load(f)
+            
+            migrated_count = 0
+            for request in legacy_requests:
+                if request.get('status') == 'pending':
+                    card_id = request.get('card_id')
+                    name = request.get('name', '')
+                    first_name = request.get('first_name', '')
+                    last_name = request.get('last_name', '')
+                    email = request.get('email', '')
+                    
+                    # Check if already exists in database
+                    if not db.get_pending_request(card_id) and not db.get_user(card_id):
+                        success = db.add_pending_request(card_id, name, first_name, last_name, email, '', '')
+                        if success:
+                            migrated_count += 1
+                            logger.info(f"Migrated pending request: {card_id} - {name}")
+            
+            # Move the legacy file to backup
+            backup_file = f"{legacy_file}.migrated.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            os.rename(legacy_file, backup_file)
+            
+            logger.info(f"Migration complete: {migrated_count} requests migrated from {legacy_file}")
+            logger.info(f"Legacy file backed up as: {backup_file}")
+            
+    except Exception as e:
+        logger.error(f"Error during legacy data migration: {e}")
+
 def initialize_components():
     """Initialize card reader and LabJack components"""
     global card_reader, labjack_u3
@@ -87,6 +133,9 @@ def initialize_components():
         # Initialize database
         db.init_db()
         logger.info("Database initialized successfully")
+        
+        # Migrate legacy JSON data if present
+        migrate_legacy_json_data()
         
         # Initialize card reader
         card_reader = CardReader(on_card_read=handle_card_read)
@@ -201,28 +250,36 @@ def handle_card_read(card_data):
 
 def unlock_shear(card_id, user_info=None):
     """Unlock shear and start monitoring"""
-    global shear_unlock_timer, shear_unlocked, shear_unlock_timestamp, shear_unlock_user
+    global shear_unlock_timer, shear_unlocked, shear_unlock_timestamp, shear_unlock_user, shear_cycles
     
     try:
         # Cancel any existing timer
         if shear_unlock_timer:
             shear_unlock_timer.cancel()
         
-        # Set shear output HIGH to unlock
+        # Set shear output HIGH to unlock (only if in auto mode)
         if labjack_u3 and labjack_u3.is_connected():
-            labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], True)
+            shear_pin = SHEAR_SETTINGS['shear_output_pin']
+            if output_modes.get(shear_pin, 'auto') == 'auto':
+                # Only control output if in auto mode
+                labjack_u3.set_digital_output(shear_pin, True)
+                logger.info(f"Shear output set HIGH (AUTO MODE)")
+            else:
+                logger.info(f"Shear output in MANUAL MODE - not changing state")
             # No LED control - just unlock the shear
         
         shear_unlocked = True
         shear_unlock_timestamp = datetime.now()
         shear_unlock_user = user_info or {}
-        logger.info(f"Shear unlocked for card: {card_id}")
+        shear_cycles = 0  # Reset cycles when shear is unlocked
+        logger.info(f"Shear unlocked for card: {card_id} (Cycles reset to 0)")
         
         # Broadcast status change via SSE
         status_event = {
             'type': 'status_change',
             'shear_unlocked': True,
             'unlock_user': user_info,
+            'cycles': shear_cycles,
             'timestamp': datetime.now().isoformat()
         }
         card_scan_events.append(status_event)
@@ -244,9 +301,15 @@ def lock_shear():
             shear_unlock_timer.cancel()
             shear_unlock_timer = None
         
-        # Set shear output LOW to lock
+        # Set shear output LOW to lock (only if in auto mode)
         if labjack_u3 and labjack_u3.is_connected():
-            labjack_u3.set_digital_output(SHEAR_SETTINGS['shear_output_pin'], False)
+            shear_pin = SHEAR_SETTINGS['shear_output_pin']
+            if output_modes.get(shear_pin, 'auto') == 'auto':
+                # Only control output if in auto mode
+                labjack_u3.set_digital_output(shear_pin, False)
+                logger.info(f"Shear output set LOW (AUTO MODE)")
+            else:
+                logger.info(f"Shear output in MANUAL MODE - not changing state")
             # No LED control - just lock the shear
         
         shear_unlocked = False
@@ -293,31 +356,49 @@ def start_shear_timeout_timer():
 
 def handle_labjack_input_change(change_data):
     """Handle LabJack input changes"""
-    global shear_unlocked
+    global shear_unlocked, shear_cycles
     try:
         logger.info(f"LabJack input change: {change_data}")
+        print(f"[DEBUG] LabJack input change: {change_data}")
+        print(f"[DEBUG] Current shear_unlocked: {shear_unlocked}")
+        print(f"[DEBUG] Motion input pin setting: {SHEAR_SETTINGS['motion_input_pin']}")
         
         # Check for motion detection while shear is unlocked
-        if (change_data['channel'] == SHEAR_SETTINGS['motion_input_pin'] and 
-            shear_unlocked and change_data.get('state')):
-            # Motion detected while shear is unlocked - reset timer
-            logger.info("Motion detected - resetting shear timeout timer")
-            start_shear_timeout_timer()
-            
-            # Add to session logs
-            log_entry = {
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'message': "Motion detected - shear timeout reset"
-            }
-            session_logs.append(log_entry)
+        if (change_data['channel'] == SHEAR_SETTINGS['motion_input_pin'] and shear_unlocked):
+            if change_data.get('state'):
+                # Motion detected (HIGH state) - reset timer and increment cycle
+                logger.info("Motion detected (HIGH) - resetting shear timeout timer and incrementing cycle")
+                print(f"[MOTION DETECTOR] Motion detected on {SHEAR_SETTINGS['motion_input_pin']} - Timer reset!")
+                start_shear_timeout_timer()
+                
+                # Increment cycle counter for each motion detection
+                shear_cycles += 1
+                print(f"[MOTION DETECTOR] Shear cycle #{shear_cycles}")
+                
+                # Add to session logs
+                log_entry = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'message': f"Motion detected on {SHEAR_SETTINGS['motion_input_pin']} - cycle #{shear_cycles}, timer reset"
+                }
+                session_logs.append(log_entry)
+            else:
+                # Motion stopped (LOW state) - just log it
+                logger.info("Motion stopped (LOW) - no action taken")
+                print(f"[MOTION DETECTOR] Motion stopped on {SHEAR_SETTINGS['motion_input_pin']}")
         
         # Add context for specific sensors
         if change_data['channel'] == 'FIO4':  # Motion sensor
-            logger.info(f"Motion sensor change: {'detected' if change_data.get('state') else 'clear'}")
+            motion_state = 'detected' if change_data.get('state') else 'clear'
+            logger.info(f"Motion sensor (FIO4) change: {motion_state}")
+            print(f"[SENSOR] FIO4 Motion: {motion_state}")
         elif change_data['channel'] == 'FIO5':  # Additional input
-            logger.info(f"FIO5 input change: {'HIGH' if change_data.get('state') else 'LOW'}")
+            input_state = 'HIGH' if change_data.get('state') else 'LOW'
+            logger.info(f"FIO5 input change: {input_state}")
+            print(f"[SENSOR] FIO5 Input: {input_state}")
         elif change_data['channel'] == 'AIN0':  # Temperature sensor
-            logger.info(f"Temperature sensor change: {change_data.get('value')}°C")
+            temp_value = change_data.get('value', 'unknown')
+            logger.info(f"Temperature sensor change: {temp_value}°C")
+            print(f"[SENSOR] Temperature: {temp_value}°C")
         
     except Exception as e:
         logger.error(f"Error handling LabJack input change: {e}")
@@ -575,39 +656,39 @@ def api_request_access():
         if not card_id or not name:
             return jsonify({'success': False, 'message': 'Card ID and name are required'}), 400
         
-        # Load existing access requests
-        requests_file = 'access_requests.json'
-        try:
-            with open(requests_file, 'r') as f:
-                access_requests = json.load(f)
-        except FileNotFoundError:
-            access_requests = []
+        # Check if card already has access
+        existing_user = db.get_user(card_id)
+        if existing_user:
+            return jsonify({'success': False, 'message': 'Card already has access'}), 400
         
-        # Check if request already exists for this card
-        existing_request = next((req for req in access_requests if req['card_id'] == card_id), None)
+        # Check if access request already exists
+        existing_request = db.get_pending_request(card_id)
         if existing_request:
-            return jsonify({'success': False, 'message': 'Access request already exists for this card'}), 400
+            return jsonify({'success': False, 'message': 'Access request already exists'}), 400
         
-        # Add new request
-        new_request = {
-            'card_id': card_id,
-            'name': name,
-            'first_name': first_name,
-            'last_name': last_name,
-            'email': email,
-            'timestamp': datetime.now().isoformat(),
-            'status': 'pending'
-        }
+        # Create full name from parts if provided, otherwise use name field
+        if first_name and last_name:
+            full_name = f"{first_name} {last_name}".strip()
+        else:
+            full_name = name
+            # Try to split name into first/last if not provided
+            if not first_name and not last_name:
+                name_parts = name.split()
+                if len(name_parts) >= 2:
+                    first_name = name_parts[0]
+                    last_name = ' '.join(name_parts[1:])
+                else:
+                    first_name = name
+                    last_name = ''
         
-        access_requests.append(new_request)
+        # Add pending request to database
+        success = db.add_pending_request(card_id, full_name, first_name, last_name, email, '', '')
         
-        # Save requests
-        with open(requests_file, 'w') as f:
-            json.dump(access_requests, f, indent=2)
-        
-        logger.info(f"Access request submitted for card {card_id} by {name}")
-        
-        return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+        if success:
+            logger.info(f"Access request submitted for card {card_id} by {full_name}")
+            return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to submit access request'}), 500
         
     except Exception as e:
         logger.error(f"Error processing access request: {e}")
@@ -617,15 +698,8 @@ def api_request_access():
 def api_get_access_requests():
     """Get all pending access requests"""
     try:
-        requests_file = 'access_requests.json'
-        try:
-            with open(requests_file, 'r') as f:
-                access_requests = json.load(f)
-        except FileNotFoundError:
-            access_requests = []
-        
-        # Filter only pending requests
-        pending_requests = [req for req in access_requests if req.get('status') == 'pending']
+        # Get all pending requests from database
+        pending_requests = db.get_all_pending_requests()
         
         return jsonify({'success': True, 'requests': pending_requests})
         
@@ -659,8 +733,8 @@ def api_approve_access_request(card_id):
         # Create full name
         full_name = f"{pending_request['first_name']} {pending_request['last_name']}"
         
-        # Add user to database (note: department from request data, not from pending_request)
-        success = db.add_user(card_id, full_name, access_level, department, 'active')
+        # Add user to database (note: department and shift from request data, not from pending_request)
+        success = db.add_user(card_id, full_name, access_level, department, shift, 'active')
         
         if success:
             # Remove from pending requests
@@ -711,14 +785,27 @@ def api_users():
         users = db.get_all_users()
         formatted_users = []
         for user in users:
-            formatted_users.append({
-                'card_id': user['card_id'],
-                'name': user['name'],
-                'access_level': user['access_level'],
-                'department': user['department'],
-                'active': user['status'] == 'active'
-            })
-        
+            if not isinstance(user, dict):
+                logger.warning(f"Unexpected user record type in get_all_users(): {type(user)} -> {user}")
+                continue
+            # Safely extract fields with defaults
+            shift_val = ''
+            try:
+                shift_val = user['shift'] if user.get('shift') is not None else ''
+            except Exception:
+                # If even this fails, leave shift blank
+                shift_val = ''
+            try:
+                formatted_users.append({
+                    'card_id': user.get('card_id', ''),
+                    'name': user.get('name', ''),
+                    'access_level': user.get('access_level', ''),
+                    'department': user.get('department', ''),
+                    'shift': shift_val,
+                    'active': user.get('status', '') == 'active'
+                })
+            except Exception as inner_e:
+                logger.error(f"Failed to format user record {user}: {inner_e}")
         return jsonify({'success': True, 'users': formatted_users})
     except Exception as e:
         logger.error(f"Error getting users: {e}")
@@ -735,6 +822,8 @@ def api_add_user():
         card_id = data.get('card_id', '').strip()
         user_name = data.get('user_name', '').strip()
         access_level = data.get('access_level', 'user')
+        department = data.get('department', '').strip()
+        shift = data.get('shift', '').strip()
         
         if not card_id or not user_name:
             return jsonify({'success': False, 'message': 'Card ID and user name are required'}), 400
@@ -745,7 +834,7 @@ def api_add_user():
             return jsonify({'success': False, 'message': 'Card already exists'}), 400
         
         # Add user to database
-        success = db.add_user(card_id, user_name, access_level, '', 'active')
+        success = db.add_user(card_id, user_name, access_level, department, shift, 'active')
         if success:
             return jsonify({'success': True, 'message': f'User {user_name} added successfully'})
         else:
@@ -771,6 +860,7 @@ def api_update_user(card_id):
         user_name = data.get('user_name', '').strip()
         access_level = data.get('access_level', 'user')
         department = data.get('department', '').strip()
+        shift = data.get('shift', '').strip()
         
         if not user_name:
             return jsonify({'success': False, 'message': 'User name is required'}), 400
@@ -780,14 +870,17 @@ def api_update_user(card_id):
         if not existing_user:
             return jsonify({'success': False, 'message': 'Card not found'}), 404
         
-        # Permission check: managers can only assign user access level
-        if user_role == 'manager' and access_level not in ['user']:
-            return jsonify({'success': False, 'message': 'Managers can only assign user access level'}), 403
+        # Permission check: managers can only edit user access level accounts and can't change access level
+        if user_role == 'manager':
+            if existing_user['access_level'] != 'user':
+                return jsonify({'success': False, 'message': 'Managers can only edit user-level accounts'}), 403
+            # Force access_level to remain 'user' for manager edits
+            access_level = 'user'
         
         # Update the user
-        success = db.update_user(card_id, user_name, access_level, department, existing_user['status'])
+        success = db.update_user(card_id, user_name, access_level, department, shift, existing_user['status'])
         if success:
-            logger.info(f"User {card_id} updated by {user_role}: {user_name} - {access_level} - {department}")
+            logger.info(f"User {card_id} updated by {user_role}: {user_name} - {access_level} - {department} - {shift}")
             return jsonify({'success': True, 'message': f'User {user_name} updated successfully'})
         else:
             return jsonify({'success': False, 'message': 'Failed to update user'}), 500
@@ -810,10 +903,10 @@ def api_remove_user(card_id):
         if not existing_user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
         
-        # Additional permission check: managers cannot remove admin/manager users
-        if user_role == 'manager' and existing_user['access_level'] in ['admin', 'manager']:
+        # Additional permission check: managers cannot remove admin/manager users (case-insensitive)
+        if user_role == 'manager' and existing_user.get('access_level', '').lower() in ['admin', 'manager']:
             return jsonify({'success': False, 'message': 'Managers cannot remove admin or manager users'}), 403
-        
+
         success = db.remove_user(card_id)
         if success:
             logger.info(f"User {card_id} ({existing_user['name']}) removed by {user_role}")
@@ -1254,7 +1347,7 @@ def api_factory_reset():
 @app.route('/api/status')
 def api_status():
     """API endpoint to check system status"""
-    global shear_unlocked, shear_unlock_timer, shear_unlock_timestamp, shear_unlock_user
+    global shear_unlocked, shear_unlock_timer, shear_unlock_timestamp, shear_unlock_user, shear_cycles
     
     # Calculate remaining time if timer is active
     remaining_time = 0
@@ -1280,7 +1373,8 @@ def api_status():
             'timeout_setting': SHEAR_SETTINGS['unlock_timeout'],
             'output_pin': SHEAR_SETTINGS['shear_output_pin'],
             'motion_pin': SHEAR_SETTINGS['motion_input_pin'],
-            'unlock_user': shear_unlock_user
+            'unlock_user': shear_unlock_user,
+            'cycles': shear_cycles
         },
         'recent_logs': session_logs[-5:] if session_logs else []
     }
@@ -1322,7 +1416,7 @@ def approve_request():
             return jsonify({'success': False, 'message': 'Card ID and name are required'}), 400
         
         # Add user to access list
-        success = db.add_user(card_id, name, access_level, department, 'active')
+        success = db.add_user(card_id, name, access_level, department, shift)
         if success:
             # Remove from pending requests
             db.remove_pending_request(card_id)
@@ -1390,8 +1484,20 @@ def submit_access_request():
             success = db.add_pending_request(card_id, full_name, first_name, last_name, '', department, shift)
         
         if success:
+            # If auto-accept is enabled, immediately convert to active user
+            if auto_accept_enabled:
+                full_name_for_user = full_name if full_name else f"{first_name} {last_name}".strip()
+                # Attempt to add user directly
+                added = db.add_user(card_id, full_name_for_user, 'user', department, shift, 'active')
+                if added:
+                    # Remove pending request if it still exists
+                    db.remove_pending_request(card_id)
+                    logger.info(f"Auto-accepted and added user {full_name_for_user} (card {card_id}) - dept={department} shift={shift}")
+                    return jsonify({'success': True, 'auto_accepted': True, 'message': 'Access automatically granted'})
+                else:
+                    logger.warning(f"Auto-accept failed to add user for card {card_id}; leaving as pending")
             logger.info(f"User {first_name} {last_name} submitted access request for card {card_id}")
-            return jsonify({'success': True, 'message': 'Access request submitted successfully'})
+            return jsonify({'success': True, 'auto_accepted': False, 'message': 'Access request submitted successfully'})
         else:
             return jsonify({'success': False, 'message': 'Failed to submit access request'}), 500
         
@@ -1448,6 +1554,16 @@ def toggle_auto_accept():
         logger.error(f"Error toggling auto-accept: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/auto-accept', methods=['GET'])
+def get_auto_accept_state():
+    """Return current auto-accept state (admin use)."""
+    try:
+        return jsonify({'success': True, 'enabled': auto_accept_enabled})
+    except Exception as e:
+        logger.error(f"Error getting auto-accept state: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/card-events-history', methods=['GET'])
 def get_card_events_history():
     """Get recent card events history (from log or database)"""
@@ -1498,8 +1614,49 @@ def labjack_control():
         elif action == 'set_digital_output':
             channel = data.get('channel')
             state = data.get('state', False)
-            success = labjack_u3.set_digital_output(channel, state)
-            return jsonify({'success': success, 'message': f'{channel} set to {"HIGH" if state else "LOW"}'})
+            
+            # Check if output is in manual mode
+            if output_modes.get(channel, 'auto') == 'manual':
+                # In manual mode - allow full control and store manual state
+                manual_output_states[channel] = state
+                success = labjack_u3.set_digital_output(channel, state)
+                return jsonify({'success': success, 'message': f'{channel} set to {"HIGH" if state else "LOW"} (MANUAL MODE)'})
+            else:
+                # In auto mode - this shouldn't typically be called directly, but allow for testing
+                success = labjack_u3.set_digital_output(channel, state)
+                return jsonify({'success': success, 'message': f'{channel} set to {"HIGH" if state else "LOW"} (AUTO MODE)'})
+        
+        elif action == 'set_output_mode':
+            # New action to set manual/auto mode for an output
+            channel = data.get('channel')
+            mode = data.get('mode', 'auto')  # 'manual' or 'auto'
+            
+            if channel in output_modes:
+                output_modes[channel] = mode
+                
+                # If switching to auto mode, restore logic state
+                if mode == 'auto':
+                    # Determine what the logic state should be for this output
+                    if channel == SHEAR_SETTINGS['shear_output_pin']:
+                        # For shear output, set based on current shear state
+                        logic_state = shear_unlocked
+                        labjack_u3.set_digital_output(channel, logic_state)
+                        message = f'{channel} set to AUTO mode - restored to logic state: {"HIGH" if logic_state else "LOW"}'
+                    else:
+                        # For other outputs, default to LOW when in auto mode
+                        labjack_u3.set_digital_output(channel, False)
+                        message = f'{channel} set to AUTO mode - set to LOW'
+                else:
+                    # Manual mode - don't change output state, just enable manual control
+                    message = f'{channel} set to MANUAL mode - manual control enabled'
+                
+                return jsonify({'success': True, 'message': message, 'mode': mode})
+            else:
+                return jsonify({'success': False, 'message': f'Invalid channel: {channel}'})
+        
+        elif action == 'get_output_modes':
+            # Get current modes for all outputs
+            return jsonify({'success': True, 'output_modes': output_modes, 'manual_states': manual_output_states})
         
         elif action == 'set_analog_output':
             channel = data.get('channel')
@@ -1698,6 +1855,25 @@ def start_labjack():
     """Start LabJack U3 in background thread"""
     if labjack_u3:
         labjack_u3.start_monitoring()
+
+@app.route('/api/debug-monitor-status', methods=['GET'])
+def debug_monitor_status():
+    """Debug endpoint to check monitoring thread status without restart"""
+    try:
+        if not labjack_u3:
+            return jsonify({'success': False, 'error': 'LabJack not initialized'})
+        
+        status = {
+            'labjack_connected': labjack_u3.is_connected(),
+            'labjack_running': getattr(labjack_u3, 'running', False),
+            'monitor_thread_exists': hasattr(labjack_u3, 'monitor_thread') and labjack_u3.monitor_thread is not None,
+            'monitor_thread_alive': labjack_u3.monitor_thread.is_alive() if hasattr(labjack_u3, 'monitor_thread') and labjack_u3.monitor_thread else False,
+            'callback_registered': labjack_u3.on_input_change is not None,
+            'callback_function': str(labjack_u3.on_input_change) if labjack_u3.on_input_change else None
+        }
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     # Initialize components

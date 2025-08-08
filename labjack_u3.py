@@ -380,11 +380,17 @@ class LabJackU3:
         return None
     
     def monitor_loop(self):
-        """Main monitoring loop for input changes"""
-        logger.info("LabJack U3 monitoring started")
+        """Monitor for input changes"""
+        logger.info("Starting LabJack U3 monitoring loop")
+        loop_count = 0
         
         while self.running:
             try:
+                loop_count += 1
+                # Heartbeat every 10 loops (5 seconds)
+                if loop_count % 10 == 0:
+                    print(f"[MONITOR HEARTBEAT] Loop #{loop_count} - Thread is running")
+                    logger.info(f"Monitor loop heartbeat #{loop_count}")
                 if not self.is_connected():
                     # Try to reconnect
                     if self.connect():
@@ -397,10 +403,16 @@ class LabJackU3:
                 current_inputs = self.read_digital_inputs()
                 current_analogs = self.read_analog_inputs()
                 
+                print(f"[MONITOR DEBUG] Current inputs: {current_inputs}")
+                print(f"[MONITOR DEBUG] Last input states: {self.last_input_states}")
+                
                 # Check for input changes
                 for channel, current_state in current_inputs.items():
                     last_state = self.last_input_states.get(channel, False)
                     if current_state != last_state:
+                        print(f"[LABJACK MONITOR] State change detected: {channel} {last_state} -> {current_state}")
+                        print(f"[LABJACK MONITOR] Callback available: {self.on_input_change is not None}")
+                        
                         self.last_input_states[channel] = current_state
                         
                         change_data = {
@@ -411,7 +423,13 @@ class LabJackU3:
                         }
                         
                         if self.on_input_change:
-                            self.on_input_change(change_data)
+                            print(f"[LABJACK DEBUG] Calling callback for {channel}: {current_state}")
+                            try:
+                                self.on_input_change(change_data)
+                                print(f"[LABJACK DEBUG] Callback completed successfully for {channel}")
+                            except Exception as e:
+                                print(f"[LABJACK ERROR] Callback failed for {channel}: {e}")
+                                logger.error(f"Callback failed for {channel}: {e}")
                 
                 # Check for significant analog changes (> 0.1V)
                 for channel, current_value in current_analogs.items():
@@ -457,10 +475,20 @@ class LabJackU3:
             logger.error("Failed to connect to LabJack U3")
             return
         
+        print("[STARTUP DEBUG] About to start monitoring thread")
+        logger.info("About to start monitoring thread")
+        
         self.running = True
         self.monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.monitor_thread.start()
-        logger.info("LabJack U3 monitoring thread started")
+        
+        print(f"[STARTUP DEBUG] Monitor thread started: {self.monitor_thread.is_alive()}")
+        logger.info(f"LabJack U3 monitoring thread started, alive: {self.monitor_thread.is_alive()}")
+        
+        # Give it a moment to start
+        time.sleep(0.1)
+        print(f"[STARTUP DEBUG] Monitor thread alive after delay: {self.monitor_thread.is_alive()}")
+        logger.info(f"Monitor thread status after delay: alive={self.monitor_thread.is_alive()}, running={self.running}")
     
     def stop_monitoring(self):
         """Stop monitoring for input changes"""

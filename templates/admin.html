@@ -4,86 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Shear System</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='8' ry='8' fill='%23dc3545'/><text x='50%' y='55%' font-size='34' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>S</text></svg>">
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background-color: #f5f5f5;
+            color: #222;
+            font-weight: normal;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
+            padding: 20px 25px 60px;
         }
         .header {
-            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
+            margin-bottom: 18px;
         }
+        .header h1 {
+            margin: 0 0 4px 0;
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+        }
+        .header p { margin: 0; color: #666; }
         .nav-bar {
-            background: #f8f9fa;
-            padding: 15px;
-            border-bottom: 1px solid #ddd;
             display: flex;
-            gap: 10px;
-            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 22px;
         }
         .nav-btn {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
             text-decoration: none;
-            color: #333;
-            transition: all 0.3s ease;
+            background: #e0e6ed;
+            color: #222;
+            padding: 10px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background .18s, color .18s, box-shadow .18s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
-        .nav-btn:hover {
-            background: #007bff;
-            color: white;
-        }
-        .nav-btn.active {
-            background: #007bff;
-            color: white;
-        }
-        .nav-btn.logout {
-            background: #dc3545;
-            color: white;
-            margin-left: auto;
-        }
-        .nav-btn.logout:hover {
-            background: #c82333;
-        }
-        .content {
-            padding: 20px;
-        }
-        .section {
-            display: none;
-            margin-bottom: 30px;
-        }
-        .section.active {
-            display: block;
-        }
+        .nav-btn:hover { background: #d0d8e2; }
+        .nav-btn.active { background: #007bff; color: #fff; }
+        .nav-btn.logout { background: #dc3545; color: #fff; }
+        .nav-btn.logout:hover { background: #c82333; }
+        .content { position: relative; }
+        .section { display: none; }
+        .section.active { display: block; }
         .card {
-            background: #f8f9fa;
+            background: #fff;
+            border: 1px solid #ddd;
             border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-left: 4px solid #dc3545;
+            padding: 18px 20px 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
         }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
+        .card h3 { margin-top: 0; font-weight: 600; }
         .form-group input, .form-group select {
             width: 100%;
             padding: 8px;
@@ -113,6 +91,40 @@
             background: #ffc107;
             color: #212529;
         }
+        
+        /* Toast notifications */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            min-width: 250px;
+            background: rgba(40,40,40,0.95);
+            border: 2px solid #28a745;
+            color: #e6ffe6;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.9em;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+            pointer-events: auto;
+        }
+        .toast.error {
+            border-color: #dc3545;
+            color: #ffe6e6;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
         .user-list {
             max-height: 400px;
             overflow-y: auto;
@@ -255,9 +267,87 @@
             padding: 10px;
             border-bottom: 1px solid #eee;
         }
+        
+        /* Confirmation modal styles */
+        .confirm-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            backdrop-filter: blur(5px);
+        }
+        
+        .confirm-modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 2px solid #ddd;
+        }
+        
+        .confirm-modal h3 {
+            margin: 0 0 15px 0;
+            color: #dc3545;
+            font-size: 20px;
+        }
+        
+        .confirm-modal p {
+            margin: 0 0 25px 0;
+            color: #333;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        
+        .confirm-modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .confirm-modal-buttons button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            min-width: 100px;
+            transition: all 0.3s ease;
+        }
+        
+        .confirm-modal-buttons .btn-confirm {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .confirm-modal-buttons .btn-confirm:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+        
+        .confirm-modal-buttons .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .confirm-modal-buttons .btn-cancel:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
+    <div id="toast-container"></div>
+    
     <div class="container">
         <div class="header">
             <h1>Admin Dashboard</h1>
@@ -267,7 +357,6 @@
         <div class="nav-bar">
             <a href="#" class="nav-btn active" onclick="showSection('users')">Manage Users</a>
             <a href="#" class="nav-btn" onclick="showSection('requests')">Access Requests</a>
-            <a href="#" class="nav-btn" onclick="showSection('management')">Shifts</a>
             <a href="#" class="nav-btn" onclick="showSection('logs')">View Logs</a>
             <a href="#" class="nav-btn" onclick="showSection('usage')">Usage Reports</a>
             <a href="#" class="nav-btn" onclick="showSection('settings')">Settings</a>
@@ -281,7 +370,6 @@
             <div id="users" class="section active">
                 <div class="card">
                     <h3>🔍 User Management</h3>
-                    <p><strong>Note:</strong> To add new users, use the industry-standard card registration system in the "Access Requests" tab. Have users scan their cards at the main terminal to create registration requests.</p>
                     
                     <div style="margin-bottom: 15px;">
                         <button class="btn" onclick="loadUsers()">Refresh Users</button>
@@ -296,6 +384,60 @@
                         <div class="user-item">
                             <div>Loading users...</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Edit User Modal -->
+            <div id="edit-user-modal" class="confirm-modal" style="display: none;">
+                <div class="confirm-modal-content" style="max-width: 500px;">
+                    <h3>✏️ Edit User</h3>
+                    <form id="edit-user-form">
+                        <div style="margin: 15px 0;">
+                            <label for="edit-card-id" style="display: block; margin-bottom: 5px;">Card ID:</label>
+                            <input type="text" id="edit-card-id" readonly style="background: #f5f5f5; width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-user-name" style="display: block; margin-bottom: 5px;">Name:</label>
+                            <input type="text" id="edit-user-name" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-access-level" style="display: block; margin-bottom: 5px;">Access Level:</label>
+                            <select id="edit-access-level" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="user">User</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-department" style="display: block; margin-bottom: 5px;">Department:</label>
+                            <select id="edit-department" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">Select Department</option>
+                                <option value="Sheet Shop">Sheet Shop</option>
+                                <option value="Base Shop">Base Shop</option>
+                                <option value="Electric Shop">Electric Shop</option>
+                                <option value="Assembly">Assembly</option>
+                                <option value="Door Shop">Door Shop</option>
+                                <option value="QA">QA</option>
+                                <option value="Maintenance">Maintenance</option>
+                                <option value="Management">Management</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div style="margin: 15px 0;">
+                            <label for="edit-shift" style="display: block; margin-bottom: 5px;">Shift:</label>
+                            <select id="edit-shift" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="" disabled>Select Shift</option>
+                                <option value="First">First</option>
+                                <option value="Second">Second</option>
+                                <option value="Third">Third</option>
+                            </select>
+                        </div>
+                    </form>
+                    <div class="confirm-modal-buttons" style="margin-top: 25px;">
+                        <button class="btn-confirm" id="edit-save-btn" onclick="saveUserChanges()">Save Changes</button>
+                        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -327,26 +469,6 @@
                 </div>
             </div>
             
-            <!-- Shifts Management Section -->
-            <div id="management" class="section">
-                <div class="card">
-                    <h3>⏰ Shifts Management</h3>
-                    
-                    <div style="max-width: 500px;">
-                        <!-- Shifts -->
-                        <div>
-                            <h4>Shifts</h4>
-                            <div style="margin-bottom: 10px;">
-                                <input type="text" id="new-shift" placeholder="New Shift Name" style="margin-right: 10px; padding: 8px;">
-                                <button class="btn" onclick="addShift()">Add Shift</button>
-                            </div>
-                            <div id="shifts-list" style="border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;">
-                                <div style="padding: 10px;">Loading shifts...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
             
             <!-- Logs Section -->
             <div id="logs" class="section">
@@ -468,6 +590,23 @@
     </div>
 
     <script>
+        // Toast notification system
+        function showToast(message, type = 'success', duration = 2000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast' + (type === 'error' ? ' error' : '');
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+        
         // Include all the functions from manager.html
         function showSection(sectionName) {
             document.querySelectorAll('.section').forEach(section => {
@@ -495,11 +634,22 @@
         }
         
         function loadUsers() {
-            fetch('/api/users')
-                .then(response => response.json())
+            const userList = document.getElementById('user-list');
+            if (!userList) return;
+            userList.innerHTML = '<div class="user-item"><div>Loading users...</div></div>';
+            console.log('[ADMIN] Loading users...');
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
+            fetch('/api/users', { signal: controller.signal })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json().catch(e => { throw new Error('Invalid JSON'); });
+                })
                 .then(data => {
-                    const userList = document.getElementById('user-list');
-                    if (data.success && data.users.length > 0) {
+                    console.log('[ADMIN] Users response:', data);
+                    if (data.success && Array.isArray(data.users) && data.users.length > 0) {
                         userList.innerHTML = `
                             <table style="width: 100%; border-collapse: collapse;">
                                 <thead>
@@ -522,20 +672,29 @@
                                             <td style="padding: 10px; border: 1px solid #ddd;">${user.shift || ''}</td>
                                             <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
                                                 <button class="btn" onclick="editUser('${user.card_id}')" style="margin-right: 5px; background-color: #007bff; color: white;">Edit</button>
-                                                <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
+                                                <button class="btn danger" onclick="confirmRemoveUser('${user.card_id}', '${user.name}')">Remove</button>
                                             </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
-                            </table>
-                        `;
+                            </table>`;
                     } else {
                         userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading users:', error);
-                    document.getElementById('user-list').innerHTML = '<div class="user-item"><div>Error loading users</div></div>';
+                    console.error('[ADMIN] Error loading users:', error);
+                    userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+                })
+                .finally(() => {
+                    clearTimeout(timeout);
+                    // Fallback: if still showing loading after 1s, replace
+                    setTimeout(() => {
+                        if (userList.textContent.includes('Loading users')) {
+                            console.log('[ADMIN] Fallback triggered, replacing stuck loading state');
+                            userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+                        }
+                    }, 1000);
                 });
         }
         
@@ -573,7 +732,7 @@
                                             <td style="padding: 10px; border: 1px solid #ddd;">${user.shift || ''}</td>
                                             <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
                                                 <button class="btn" onclick="editUser('${user.card_id}')" style="margin-right: 5px; background-color: #007bff; color: white;">Edit</button>
-                                                <button class="btn danger" onclick="removeUser('${user.card_id}')">Remove</button>
+                                                <button class="btn danger" onclick="confirmRemoveUser('${user.card_id}', '${user.name}')">Remove</button>
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -666,68 +825,90 @@
                 });
         }
         
-        // Add user form submission
-        document.getElementById('add-user-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const userData = {
-                card_id: formData.get('card_id'),
-                user_name: formData.get('user_name'),
-                access_level: formData.get('access_level')
-            };
-            
-            fetch('/api/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(userData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('User added successfully');
-                    e.target.reset();
-                    loadUsers();
-                } else {
-                    alert('Error adding user: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error adding user: ' + error.message);
+        // Add user form submission (legacy form may be removed)
+        (function(){
+            const addUserForm = document.getElementById('add-user-form');
+            if (!addUserForm) {
+                console.log('[ADMIN] add-user-form not found; skipping add listener');
+                return;
+            }
+            addUserForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const userData = {
+                    card_id: formData.get('card_id'),
+                    user_name: formData.get('user_name'),
+                    access_level: formData.get('access_level')
+                };
+                fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('User added successfully');
+                        e.target.reset();
+                        loadUsers();
+                    } else {
+                        showToast('Error adding user: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => showToast('Error adding user: ' + error.message, 'error'));
             });
-        });
+        })();
         
         function editUser(cardId) {
             const row = document.querySelector(`tr[data-card-id="${cardId}"]`);
             const name = row.cells[1].textContent;
             const accessLevel = row.cells[2].textContent;
             const department = row.cells[3].textContent;
+            const shift = row.cells[4].textContent;
             
-            document.getElementById('card_id').value = cardId;
-            document.getElementById('user_name').value = name;
-            document.getElementById('access_level').value = accessLevel.toLowerCase();
-            document.getElementById('department').value = department;
+            // Populate the edit form
+            document.getElementById('edit-card-id').value = cardId;
+            document.getElementById('edit-user-name').value = name;
+            document.getElementById('edit-access-level').value = accessLevel.toLowerCase();
+            document.getElementById('edit-department').value = department;
+            const shiftSelect = document.getElementById('edit-shift');
+            const saveBtn = document.getElementById('edit-save-btn');
+            if (shift && ['First','Second','Third'].includes(shift)) {
+                shiftSelect.value = shift;
+                saveBtn.disabled = false;
+                saveBtn.style.opacity = '1';
+            } else {
+                shiftSelect.selectedIndex = 0; // placeholder
+                saveBtn.disabled = true;
+                saveBtn.style.opacity = '0.5';
+            }
             
-            document.getElementById('addUserBtn').style.display = 'none';
-            document.getElementById('updateUserBtn').style.display = 'inline-block';
-            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+            // Show the edit modal
+            document.getElementById('edit-user-modal').style.display = 'flex';
         }
         
-        function cancelEdit() {
-            document.getElementById('add-user-form').reset();
-            document.getElementById('addUserBtn').style.display = 'inline-block';
-            document.getElementById('updateUserBtn').style.display = 'none';
-            document.getElementById('cancelEditBtn').style.display = 'none';
+        function closeEditModal() {
+            document.getElementById('edit-user-modal').style.display = 'none';
+            // Reset save button state for next open
+            const saveBtn = document.getElementById('edit-save-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.style.opacity = '0.5';
+            }
         }
         
-        function updateUser() {
-            const cardId = document.getElementById('card_id').value;
+        function saveUserChanges() {
+            const cardId = document.getElementById('edit-card-id').value;
+            const shiftVal = document.getElementById('edit-shift').value.trim();
+            if (!shiftVal) {
+                showToast('Please choose a shift', 'error');
+                return;
+            }
             const userData = {
-                user_name: document.getElementById('user_name').value,
-                access_level: document.getElementById('access_level').value,
-                department: document.getElementById('department').value
+                user_name: document.getElementById('edit-user-name').value,
+                access_level: document.getElementById('edit-access-level').value,
+                department: document.getElementById('edit-department').value,
+                shift: shiftVal
             };
             
             fetch(`/api/users/${cardId}`, {
@@ -740,47 +921,118 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('User updated successfully!');
-                    cancelEdit();
+                    showToast('User updated successfully', 'success');
+                    closeEditModal();
                     loadUsers();
+                    // Reset save button state after save
+                    const saveBtn = document.getElementById('edit-save-btn');
+                    if (saveBtn) {
+                        saveBtn.disabled = true;
+                        saveBtn.style.opacity = '0.5';
+                    }
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('Error: ' + data.message, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error updating user');
+                showToast('Error updating user', 'error');
             });
         }
 
-        function removeUser(cardId) {
-            if (confirm('Are you sure you want to remove this user?')) {
-                fetch(`/api/users/${cardId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        alert('User removed successfully');
-                        loadUsers();
+        // Enable save when shift chosen
+        (function(){
+            const shiftSelect = document.getElementById('edit-shift');
+            const saveBtn = document.getElementById('edit-save-btn');
+            if (shiftSelect && saveBtn) {
+                shiftSelect.addEventListener('change', () => {
+                    if (shiftSelect.value) {
+                        saveBtn.disabled = false;
+                        saveBtn.style.opacity = '1';
                     } else {
-                        alert('Error removing user: ' + data.message);
+                        saveBtn.disabled = true;
+                        saveBtn.style.opacity = '0.5';
                     }
-                })
-                .catch(error => {
-                    console.error('Remove user error:', error);
-                    alert('Error removing user: ' + error.message);
-                    // Still reload users in case the deletion actually worked
-                    setTimeout(() => {
-                        loadUsers();
-                    }, 1000);
                 });
             }
+        })();
+
+        function confirmRemoveUser(cardId, userName) {
+            showConfirmModal(
+                'Remove User',
+                `Are you sure you want to remove ${userName} from the system?`,
+                () => removeUser(cardId)
+            );
+        }
+
+        function removeUser(cardId) {
+            fetch(`/api/users/${cardId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showToast('User removed successfully', 'success');
+                    loadUsers();
+                } else {
+                    showToast('Error removing user: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Remove user error:', error);
+                showToast('Error removing user', 'error');
+                // Still reload users in case the deletion actually worked
+                setTimeout(() => {
+                    loadUsers();
+                }, 1000);
+            });
+        }
+        
+        // Confirmation modal function
+        function showConfirmModal(title, message, onConfirm) {
+            // Remove any existing modals
+            const existingModals = document.querySelectorAll('.confirm-modal');
+            existingModals.forEach(modal => modal.remove());
+            
+            const modal = document.createElement('div');
+            modal.className = 'confirm-modal';
+            modal.innerHTML = `
+                <div class="confirm-modal-content">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="confirm-modal-buttons">
+                        <button class="btn-confirm">Yes, Remove</button>
+                        <button class="btn-cancel">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            // Add event listeners
+            const confirmBtn = modal.querySelector('.btn-confirm');
+            const cancelBtn = modal.querySelector('.btn-cancel');
+            
+            confirmBtn.addEventListener('click', () => {
+                modal.remove();
+                onConfirm();
+            });
+            
+            cancelBtn.addEventListener('click', () => {
+                modal.remove();
+            });
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
         }
         
         function saveSettings() {
@@ -803,13 +1055,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Settings saved successfully');
+                    showToast('Settings saved successfully', 'success');
                 } else {
-                    alert('Error saving settings: ' + data.message);
+                    showToast('Error saving settings: ' + data.message, 'error');
                 }
             })
             .catch(error => {
-                alert('Error saving settings: ' + error.message);
+                showToast('Error saving settings: ' + error.message, 'error');
             });
         }
         
@@ -820,11 +1072,11 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.message);
+                    showToast(data.message, 'success');
                     loadSettings();
                 })
                 .catch(error => {
-                    alert('Error restarting hardware: ' + error.message);
+                    showToast('Error restarting hardware: ' + error.message, 'error');
                 });
             }
         }
@@ -836,10 +1088,10 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.message);
+                    showToast(data.message, 'success');
                 })
                 .catch(error => {
-                    alert('Error triggering emergency stop: ' + error.message);
+                    showToast('Error triggering emergency stop: ' + error.message, 'error');
                 });
             }
         }
@@ -851,14 +1103,14 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.message);
+                    showToast(data.message, data.success ? 'success' : 'error');
                     // Refresh status to show updated shear state
                     if (data.success) {
                         loadSettings();
                     }
                 })
                 .catch(error => {
-                    alert('Error locking shear: ' + error.message);
+                    showToast('Error locking shear: ' + error.message, 'error');
                 });
             }
         }
@@ -879,14 +1131,14 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Logs cleared successfully');
+                        showToast('Logs cleared successfully', 'success');
                         loadLogs();
                     } else {
-                        alert('Error clearing logs: ' + data.message);
+                        showToast('Error clearing logs: ' + data.message, 'error');
                     }
                 })
                 .catch(error => {
-                    alert('Error clearing logs: ' + error.message);
+                    showToast('Error clearing logs: ' + error.message, 'error');
                 });
             }
         }
@@ -969,7 +1221,7 @@
                                         ${departments.map(dept => `<option value="${dept}" ${dept === request.department ? 'selected' : ''}>${dept}</option>`).join('')}
                                     </select>
                                     <select id="shift-${request.card_id}">
-                                        <option value="">Select Shift</option>
+                                        <option value="" disabled>Select Shift</option>
                                         ${shifts.map(shift => `<option value="${shift}" ${shift === request.shift ? 'selected' : ''}>${shift}</option>`).join('')}
                                     </select>
                                     <select id="level-${request.card_id}">
@@ -1017,7 +1269,12 @@
             const accessLevel = document.getElementById('level-' + cardId).value;
             
             if (!name) {
-                alert('Please enter a name for this user');
+                showToast('Please enter a name for this user', 'error');
+                return;
+            }
+            
+            if (!shift) {
+                showToast('Please select a shift for this user', 'error');
                 return;
             }
             
@@ -1037,42 +1294,46 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(data.message);
+                    showToast(data.message, 'success');
                     loadAccessRequests();
                     loadUsers(); // Refresh users list too
                 } else {
-                    alert('Error: ' + data.message);
+                    showToast('Error: ' + data.message, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error approving request:', error);
-                alert('Error approving request');
+                showToast('Error approving request', 'error');
             });
         }
         
         function denyRequest(cardId) {
-            if (confirm('Are you sure you want to deny this access request?')) {
-                fetch('/api/deny-request', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ card_id: cardId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        loadAccessRequests();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error denying request:', error);
-                    alert('Error denying request');
-                });
-            }
+            showConfirmModal(
+                'Deny Access Request',
+                'Are you sure you want to deny this access request?',
+                () => {
+                    fetch('/api/deny-request', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ card_id: cardId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(data.message, 'success');
+                            loadAccessRequests();
+                        } else {
+                            showToast('Error: ' + data.message, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error denying request:', error);
+                        showToast('Error denying request', 'error');
+                    });
+                }
+            );
         }
         
         function toggleAutoAccept() {
@@ -1103,112 +1364,57 @@
             });
         }
         
-        // Shifts Management Functions
-        function loadShifts() {
-            fetch('/api/shifts')
-                .then(response => response.json())
-                .then(data => {
-                    const shiftsList = document.getElementById('shifts-list');
-                    if (data.success && data.shifts.length > 0) {
-                        shiftsList.innerHTML = data.shifts.map(shift => 
-                            '<div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">' +
-                                '<span>' + shift + '</span>' +
-                                '<button class="btn danger" style="padding: 4px 8px; font-size: 12px;" onclick="removeShift(\'' + shift + '\')">Remove</button>' +
-                            '</div>'
-                        ).join('');
-                    } else {
-                        shiftsList.innerHTML = '<div style="padding: 10px; text-align: center; color: #666;">No shifts found</div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading shifts:', error);
-                    document.getElementById('shifts-list').innerHTML = '<div style="padding: 10px; color: red;">Error loading shifts</div>';
-                });
-        }
-
-        function addShift() {
-            const shiftName = document.getElementById('new-shift').value.trim();
-            if (!shiftName) {
-                alert('Please enter a shift name');
-                return;
-            }
-            
-            fetch('/api/shifts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name: shiftName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('new-shift').value = '';
-                    loadShifts();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error adding shift:', error);
-                alert('Error adding shift');
-            });
-        }
-
-        function removeShift(shiftName) {
-            if (confirm('Are you sure you want to remove the shift "' + shiftName + '"?')) {
-                fetch('/api/shifts/' + encodeURIComponent(shiftName), {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        loadShifts();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error removing shift:', error);
-                    alert('Error removing shift');
-                });
-            }
-        }
+    // (Shift management UI removed; still fetch shifts in loadAccessRequests for dropdowns)
         
-        // Load initial data
-        loadUsers();
-        loadShifts();
+        // Initialize page when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[ADMIN] DOMContentLoaded fired');
+            // Load users first with isolated try/catch so failures don't prevent UI update
+            try {
+                loadUsers();
+            } catch(e) {
+                console.error('[ADMIN] loadUsers threw:', e);
+                const userList = document.getElementById('user-list');
+                if (userList) userList.innerHTML = '<div class="user-item"><div>No users found</div></div>';
+            }
+            // Defer the rest slightly to avoid blocking
+            setTimeout(() => {
+                try { loadAccessRequests(); } catch(e){ console.error('[ADMIN] loadAccessRequests error', e);} 
+                try { loadSettings(); } catch(e){ console.error('[ADMIN] loadSettings error', e);} 
+            }, 50);
+        });
         
         // Password form submission handler
-        document.getElementById('password-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const passwordData = {
-                role: formData.get('role'),
-                password: formData.get('password')
-            };
-            
-            fetch('/api/change-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(passwordData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Password changed successfully');
-                    e.target.reset();
-                } else {
-                    alert('Error changing password: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error changing password: ' + error.message);
+        (function(){
+            const pwdForm = document.getElementById('password-form');
+            if (!pwdForm) {
+                console.warn('[ADMIN] password-form not present; skipping password listener setup');
+                return;
+            }
+            pwdForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const passwordData = {
+                    role: formData.get('role'),
+                    password: formData.get('password')
+                };
+                fetch('/api/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(passwordData)
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Password changed successfully');
+                        e.target.reset();
+                    } else {
+                        alert('Error changing password: ' + data.message);
+                    }
+                })
+                .catch(error => alert('Error changing password: ' + error.message));
             });
-        });
+        })();
         
         // Purge pending requests function
         function purgePendingRequests() {

@@ -627,21 +627,66 @@
             const modeSelector = document.getElementById(`mode-${outputNum}`);
             const toggleBtn = document.getElementById(`toggle-${outputNum}`);
             
-            if (modeSelector.value === 'manual') {
-                toggleBtn.disabled = false;
-                toggleBtn.style.background = '#007bff';
-                toggleBtn.style.color = 'white';
-            } else {
-                toggleBtn.disabled = true;
-                toggleBtn.style.background = '#e9ecef';
-                toggleBtn.style.color = '#6c757d';
-            }
+            // Map output numbers to LabJack channels
+            const channelMap = {
+                6: 'FIO6',
+                7: 'FIO7'
+            };
+            
+            const newMode = modeSelector.value;
+            const channel = channelMap[outputNum];
+            
+            // Send mode change to server
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'set_output_mode',
+                    channel: channel,
+                    mode: newMode
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`✅ ${channel} mode set to ${newMode.toUpperCase()}`);
+                    
+                    // Update UI based on mode
+                    if (newMode === 'manual') {
+                        toggleBtn.disabled = false;
+                        toggleBtn.style.background = '#007bff';
+                        toggleBtn.style.color = 'white';
+                    } else {
+                        toggleBtn.disabled = true;
+                        toggleBtn.style.background = '#e9ecef';
+                        toggleBtn.style.color = '#6c757d';
+                    }
+                } else {
+                    addLogEntry(`❌ Failed to set ${channel} mode: ${data.message}`);
+                    // Revert selector to previous value if it failed
+                    modeSelector.value = newMode === 'manual' ? 'auto' : 'manual';
+                }
+            })
+            .catch(error => {
+                addLogEntry(`❌ Error setting ${channel} mode: ${error.message}`);
+                // Revert selector to previous value if it failed
+                modeSelector.value = newMode === 'manual' ? 'auto' : 'manual';
+            });
         }
         
         function toggleOutput(outputNum) {
+            const modeSelector = document.getElementById(`mode-${outputNum}`);
             const outputElement = document.getElementById(`output-${outputNum}`);
             const currentState = outputElement.textContent === 'ON';
             const newState = !currentState;
+            
+            // Only allow toggle in manual mode
+            if (modeSelector.value !== 'manual') {
+                addLogEntry(`❌ Output ${outputNum} is in AUTO mode - manual control disabled`);
+                return;
+            }
             
             // Map output numbers to LabJack channels
             const channelMap = {
@@ -664,7 +709,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    addLogEntry(`✅ Output ${outputNum} set to ${newState ? 'ON' : 'OFF'}`);
+                    addLogEntry(`✅ Output ${outputNum} set to ${newState ? 'ON' : 'OFF'} (MANUAL)`);
                     // Update will happen automatically via status refresh
                 } else {
                     addLogEntry(`❌ Failed to control Output ${outputNum}: ${data.message}`);
@@ -675,11 +720,66 @@
             });
         }
         
-        // Initialize all outputs to Auto mode on page load
+        // Load current output modes from server
+        function loadOutputModes() {
+            fetch('/api/labjack/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'get_output_modes'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modes = data.output_modes;
+                    
+                    // Map channels to output numbers
+                    const outputMap = {
+                        'FIO6': 6,
+                        'FIO7': 7
+                    };
+                    
+                    // Update UI for each output
+                    for (const [channel, mode] of Object.entries(modes)) {
+                        const outputNum = outputMap[channel];
+                        if (outputNum) {
+                            const modeSelector = document.getElementById(`mode-${outputNum}`);
+                            const toggleBtn = document.getElementById(`toggle-${outputNum}`);
+                            
+                            if (modeSelector) {
+                                modeSelector.value = mode;
+                                
+                                // Update button state
+                                if (mode === 'manual') {
+                                    toggleBtn.disabled = false;
+                                    toggleBtn.style.background = '#007bff';
+                                    toggleBtn.style.color = 'white';
+                                } else {
+                                    toggleBtn.disabled = true;
+                                    toggleBtn.style.background = '#e9ecef';
+                                    toggleBtn.style.color = '#6c757d';
+                                }
+                            }
+                        }
+                    }
+                    
+                    addLogEntry('✅ Output modes loaded from server');
+                } else {
+                    addLogEntry('❌ Failed to load output modes from server');
+                }
+            })
+            .catch(error => {
+                addLogEntry(`❌ Error loading output modes: ${error.message}`);
+            });
+        }
+        
+        // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
-            for (let i = 0; i < 4; i++) {
-                toggleMode(i);
-            }
+            // Load current modes from server instead of defaulting to auto
+            loadOutputModes();
         });
 
         document.addEventListener('visibilitychange', function() {

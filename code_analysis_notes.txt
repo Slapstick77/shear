@@ -88,25 +88,47 @@ PROJECT STRUCTURE OVERVIEW:
 
 ## MAJOR ISSUES FOUND:
 
-### 1. DEBUGGING CODE IN PRODUCTION
+### 1. DEBUGGING CODE IN PRODUCTION - **KEEP AS IS**
 - card_reader.py has extensive print() statements (15+ console outputs per card read)
-- These appear to be debugging leftovers that should be removed or made conditional
+- **INVESTIGATION RESULT**: These are part of active debugging for card ID consistency issues
+- **STATUS**: Working as intended - DO NOT REMOVE during development
 
-### 2. PROJECT STRUCTURE INCONSISTENCIES
-- Initial workspace listing showed card_manager.py but file doesn't exist
-- Documentation mentions LabJack T7 but code uses LabJack U3
-- Suggests outdated documentation or incorrect file listings
+### 2. PROJECT STRUCTURE INCONSISTENCIES - **PARTIALLY ADDRESSED**
+- Initial workspace listing showed card_manager.py but file doesn't exist (not an issue)
+- Documentation mentions LabJack T7 but code uses LabJack U3 - **FIXED** in setup.sh
+- **STATUS**: Minor documentation fix applied
 
-### 3. POTENTIAL PERFORMANCE ISSUES
+### 3. POTENTIAL PERFORMANCE ISSUES - **DEVELOPMENT PHASE**
 - Extensive CSS !important declarations in templates
 - Multiple redundant card ID processing methods kept for debugging
-- Excessive console output during normal operation
+- **INVESTIGATION RESULT**: Part of active development for card consistency
+- **STATUS**: Appropriate for development phase
 
-### 4. DEPENDENCY MANAGEMENT
+### 4. DEPENDENCY MANAGEMENT - **DEVELOPMENT PHASE**
 - LabJackPython has no version specification
-- Could cause compatibility issues in different environments
+- **INVESTIGATION RESULT**: Common during development, can be addressed later
+- **STATUS**: Acceptable for current development phase
 
-### 5. CODE CLEANLINESS
-- Multiple ID generation methods in card_reader.py create complexity
-- Business logic comments in database module (unusual for data layer)
-- Inconsistent use of logging vs print statements
+### 5. CODE CLEANLINESS - **MIXED RESULTS**
+- Multiple ID generation methods in card_reader.py create complexity - **KEEP** (part of card fix)
+- Business logic comments in database module (unusual but not harmful)
+- Inconsistent use of logging vs print statements - **KEEP** (active debugging)
+- **STATUS**: Most items are intentional for development debugging
+
+## INVESTIGATION SUMMARY:
+Most "issues" are actually intentional development/debugging code that should remain in place.
+Only clear documentation error (T7 vs U3) was fixed.
+
+## RECENT ENHANCEMENTS:
+### Idle Timer Display Added to Operating Page
+- Added visual countdown timer in top-right corner of operating.html
+- Shows remaining time before automatic shear lock
+- Green when active, gray when inactive
+- Updates in real-time using existing /api/status endpoint
+
+### Motion Detection Timer Reset (Enhanced)
+- Confirmed existing functionality: FIO4 motion input automatically resets timeout timer
+- Enhanced motion detection with better logging and console output
+- Timer resets on motion detection (HIGH state) to prevent automatic lock during use
+- Configurable timeout setting available in admin panel (10-3600 seconds)
+- System properly handles continuous use - timer resets as long as motion is detected
